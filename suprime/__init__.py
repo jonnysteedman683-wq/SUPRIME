@@ -25,6 +25,10 @@ from .antientropy import AntiEntropy
 from .byzantine import ByzantineConsensus, QuorumRegister, TrustLedger
 from .chaos import ChaosController, ChaosTransport
 from .consensus import LeaderView, elect_leader
+from .kvstore import KVStore
+from .metrics import MetricsRegistry, StructuredLogger, prometheus_format
+from .persistence import PersistenceManager
+from .simulation import SimConfig, Simulator
 from .crdt import (
     GCounter,
     LWWMap,
@@ -38,13 +42,20 @@ from .hyparview import HyParView
 from .identity import NodeID
 from .learning import GossipLearner, LinearModel
 from .message import Message, MessageType
+from .security import (
+    EncryptedTransport,
+    Identity,
+    SecureTransport,
+    SignedTransport,
+    mint_identity,
+    verify_identity,
+)
 from .node import SwarmNode
 from .peers import Peer, PeerState, PeerTable
 from .plumtree import PlumtreeBroadcast
 from .pubsub import PubSub
 from .replicate import CRDTReplicator
 from .rga import RGA
-from .security import Identity, SecureTransport, mint_identity, verify_identity
 from .store import DistributedStore, Entry, Version
 from .tasks import Task, TaskBoard, TaskState
 from .transport import InMemoryTransport, TcpTransport, Transport, TransportError
@@ -96,5 +107,14 @@ __all__ = [
     "ByzantineConsensus",
     "GossipLearner",
     "LinearModel",
+    "SignedTransport",
+    "EncryptedTransport",
+    "KVStore",
+    "PersistenceManager",
+    "MetricsRegistry",
+    "StructuredLogger",
+    "prometheus_format",
+    "Simulator",
+    "SimConfig",
     "__version__",
 ]

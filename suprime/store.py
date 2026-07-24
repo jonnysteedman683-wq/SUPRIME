@@ -67,6 +67,7 @@ class DistributedStore:
         self._clock = clock
         self._data: Dict[str, Entry] = {}
         self._subscribers: List[Callable[[str, Any], None]] = []
+        self._commit_subs: List[Callable[[str, Entry], None]] = []
 
     def _next_version(self) -> Version:
         # Ensure monotonicity even if the wall clock does not advance between
@@ -85,6 +86,7 @@ class DistributedStore:
         entry = Entry(value=value, version=self._next_version(), deleted=False)
         self._data[key] = entry
         self._notify(key, value)
+        self._emit_commit(key, entry)
         return entry
 
     def delete(self, key: str) -> Optional[Entry]:
@@ -94,6 +96,7 @@ class DistributedStore:
         entry = Entry(value=None, version=self._next_version(), deleted=True)
         self._data[key] = entry
         self._notify(key, None)
+        self._emit_commit(key, entry)
         return entry
 
     def get(self, key: str, default: Any = None) -> Any:
@@ -101,6 +104,10 @@ class DistributedStore:
         if entry is None or entry.deleted:
             return default
         return entry.value
+
+    def entry(self, key: str) -> Optional[Entry]:
+        """Return the raw versioned :class:`Entry` for ``key`` (or ``None``)."""
+        return self._data.get(key)
 
     def __contains__(self, key: object) -> bool:
         entry = self._data.get(key)  # type: ignore[arg-type]
@@ -121,6 +128,7 @@ class DistributedStore:
             self._data[key] = entry
             if not entry.deleted:
                 self._notify(key, entry.value)
+            self._emit_commit(key, entry)
             return True
         return False
 
@@ -149,3 +157,15 @@ class DistributedStore:
     def _notify(self, key: str, value: Any) -> None:
         for callback in self._subscribers:
             callback(key, value)
+
+    def on_commit(self, callback: Callable[[str, "Entry"], None]) -> None:
+        """Register a callback invoked with ``(key, entry)`` on every commit.
+
+        Unlike :meth:`subscribe`, this passes the full versioned ``Entry``
+        (including tombstones), which is what a durable write-ahead log needs.
+        """
+        self._commit_subs.append(callback)
+
+    def _emit_commit(self, key: str, entry: "Entry") -> None:
+        for callback in self._commit_subs:
+            callback(key, entry)

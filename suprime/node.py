@@ -17,6 +17,7 @@ from typing import Awaitable, Callable, Dict, List, Optional
 from .consensus import LeaderView
 from .gossip import GossipService
 from .identity import NodeID
+from .metrics import MetricsRegistry, StructuredLogger
 from .message import Message, MessageType
 from .peers import PeerTable
 from .store import DistributedStore
@@ -84,6 +85,11 @@ class SwarmNode:
             include_store=gossip_store,
         )
         self._leader_view = LeaderView(self.id)
+
+        self.metrics = MetricsRegistry()
+        self.metrics.gauge_from("peers_alive", lambda: float(len(self.peers.alive())))
+        self.metrics.gauge_from("store_keys", lambda: float(len(self.store.keys())))
+        self.log = StructuredLogger(self.id)
 
         self._app_handlers: Dict[str, List[AppHandler]] = {}
         self._leader_callbacks: List[Callable[[str], None]] = []
@@ -170,8 +176,14 @@ class SwarmNode:
         gossip and advances distributed task coordination. Exposed publicly so
         callers (and tests) can drive the swarm deterministically.
         """
+        self.metrics.inc("ticks")
         self.gossip.bump_heartbeat()
         self.peers.tick()
+        # Re-attempt bootstrap while we know no peers: a node whose initial JOIN
+        # was lost (or that got fully isolated) keeps knocking on its seeds until
+        # it rejoins the swarm, instead of being orphaned forever.
+        if self._seeds and len(self.peers) == 0:
+            await self._bootstrap()
         self._update_leader()
         # Advance task coordination *before* gossiping so any claim or result
         # written this round is disseminated in the same round's digest, which
@@ -198,6 +210,7 @@ class SwarmNode:
         for address in targets:
             try:
                 await self._transport.send(address, message)
+                self.metrics.inc("gossip_sent")
             except Exception:  # noqa: BLE001 - unreachable peers age out via FD
                 continue
 
@@ -217,6 +230,7 @@ class SwarmNode:
         if len(self._seen_messages) > 10000:
             self._seen_messages.clear()
 
+        self.metrics.inc("messages_received")
         mtype = message.type
         if mtype == MessageType.GOSSIP:
             self.gossip.apply(message)

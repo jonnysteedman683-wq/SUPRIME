@@ -24,6 +24,10 @@ From that single channel, higher-level behaviour *emerges*:
   Byzantine-tolerant trust-weighted agreement, Merkle anti-entropy, decentralised
   federated learning, topic pub/sub, and a benchmark suite (see
   [Advanced toolkit](#advanced-toolkit)).
+- 🛡️ **Trust & production hardening** — pure-Python Ed25519 signed transport and
+  ChaCha20 encryption, WAL+snapshot persistence, metrics/observability, a
+  distributed KV database, and a deterministic simulation tester (see
+  [Production & trust](#production--trust)).
 
 It is intentionally small, dependency-free (pure Python standard library) and
 readable — a working laboratory for distributed-systems ideas.
@@ -131,6 +135,11 @@ replication, distributed task execution and leader failover end to end.
 | `suprime/learning.py` | Decentralised federated learning (gossip SGD). |
 | `suprime/pubsub.py` | Topic publish/subscribe over Plumtree. |
 | `suprime/bench.py` + `svg.py` | Scale/perf benchmarks + dependency-free SVG charts. |
+| `suprime/crypto.py` | Pure-Python Ed25519 signatures + ChaCha20 cipher. |
+| `suprime/persistence.py` | WAL + snapshot durability and crash recovery. |
+| `suprime/metrics.py` | Counters/gauges, Prometheus export, structured logging. |
+| `suprime/kvstore.py` | Distributed KV database with quorum reads/writes. |
+| `suprime/simulation.py` | Deterministic simulation testing (DST) harness. |
 
 ### How coordination emerges
 
@@ -300,6 +309,69 @@ gossip convergence vs swarm size (~O(log N)), push-sum error decaying to zero,
 and Plumtree using **N−1** payload copies per broadcast vs flooding's N·(N−1)
 (80–97% fewer messages as the swarm grows).
 
+## Production & trust
+
+### Real cryptography (pure Python, no deps)
+
+`crypto.py` implements Ed25519 signatures (RFC 8032) and ChaCha20 (RFC 8439).
+`SignedTransport` gives **public-key authentication** — each message carries the
+sender's key and signature, and is rejected unless the signature verifies *and*
+the sender's id is the fingerprint of that key, so no node can impersonate
+another (no shared secret needed). `EncryptedTransport` adds ChaCha20
+encrypt-then-HMAC confidentiality.
+
+```python
+from suprime import SignedTransport, EncryptedTransport, crypto
+sk, pk = crypto.generate_keypair()
+node = SwarmNode(transport=SignedTransport(inner, sk, pk),
+                 node_id=crypto.fingerprint(pk))
+```
+
+For production throughput, install the optional `cryptography` extra and swap the
+primitives; the pure-Python versions keep the core dependency-free.
+
+### Persistence (WAL + snapshot)
+
+`PersistenceManager` gives crash-durable state: every committed entry (local or
+replicated) is appended to a write-ahead log, periodically compacted into a
+snapshot. On restart it replays them; a torn tail record from a crash mid-write
+is safely skipped.
+
+```python
+from suprime import PersistenceManager
+pm = PersistenceManager(node.store, "./data")
+pm.recover()   # restore prior state
+pm.attach()    # durably record all future writes
+```
+
+### Observability
+
+`node.metrics` exposes counters and gauges (ticks, gossip sent, messages
+received, live peers, store size) with a Prometheus exporter; `StructuredLogger`
+emits JSON log records.
+
+### Distributed KV database
+
+`KVStore` turns the swarm into a Dynamo-style database with **tunable
+consistency**: fast local `put`/`get` (eventually consistent) or
+`quorum_put`/`quorum_get` (synchronous quorum with read-repair). Pick `W + R > N`
+for read-your-writes.
+
+```python
+from suprime import KVStore
+db = KVStore(node)
+await db.quorum_put("user:1", {"name": "ada"}, w=3)
+value = await db.quorum_get("user:1", r=1)   # W+R > N ⇒ sees the write
+```
+
+### Deterministic simulation testing
+
+`simulation.py` runs the whole swarm on a single seeded schedule of drops,
+reordering, latency, partitions and crash/restart — reproducibly. The test suite
+asserts convergence, exactly-once execution and no lost writes across many seeds;
+a failure reproduces from its seed. (This harness already caught and drove a real
+fix — bootstrap-JOIN retry for nodes whose initial join was dropped.)
+
 ## Tests
 
 ```bash
@@ -308,12 +380,14 @@ pytest -q
 
 The suite runs whole swarms deterministically over the in-memory transport
 (driving gossip rounds by hand against a manual clock) and also verifies the
-real TCP transport end to end. It covers discovery, bidirectional replication,
-distributed task execution, leader failover, chaos partition/heal reconvergence,
-push-sum convergence, stigmergic balancing, the Plumtree/HyParView overlay, CRDT
-convergence, RGA collaborative text, authenticated transport + proof of work,
-Byzantine-tolerant agreement, Merkle anti-entropy, federated-learning convergence,
-pub/sub delivery, and the benchmark harness.
+real TCP transport end to end. Coverage spans discovery, replication, distributed
+tasks, leader failover, chaos partition/heal, push-sum, stigmergy, the
+Plumtree/HyParView overlay, CRDT convergence (incl. Hypothesis property tests of
+the merge laws), RGA collaborative text, Ed25519/ChaCha20 transports, proof of
+work, Byzantine agreement, Merkle anti-entropy, federated learning, pub/sub, the
+KV database (quorum + read-repair), persistence/crash-recovery, metrics, and the
+deterministic simulation tester across many seeds. CI (`.github/workflows/ci.yml`)
+runs it on Python 3.9–3.12.
 
 ## Status
 

@@ -22,10 +22,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import itertools
+import os
 import time
 from dataclasses import dataclass
 from typing import Optional
 
+from . import crypto
 from .message import Message
 from .transport import Transport, TransportError
 
@@ -75,6 +77,145 @@ class SecureTransport(Transport):
         message.payload = dict(message.payload)
         message.payload["_sig"] = self._sign(message)
         await self._inner.send(address, message)
+
+    async def stop(self) -> None:
+        await self._inner.stop()
+
+
+# -- Ed25519-signed transport (public-key authentication) ------------------
+
+class SignedTransport(Transport):
+    """Transport decorator that signs every message with an Ed25519 key.
+
+    Unlike :class:`SecureTransport` (shared secret), this gives true public-key
+    authentication: each message carries the sender's public key and a
+    signature, and the receiver rejects it unless the signature verifies *and*
+    the sender's node id is the fingerprint of that key — so no node can forge
+    another's identity, with no shared secret to distribute.
+
+    The owning node's id should be :func:`suprime.crypto.fingerprint` of ``pk``.
+    """
+
+    def __init__(self, inner: Transport, sk: bytes, pk: bytes) -> None:
+        self._inner = inner
+        self._sk = sk
+        self._pk = pk
+        self._pk_hex = pk.hex()
+        self._on_message = None
+        self.rejected = 0
+
+    @property
+    def address(self) -> str:
+        return self._inner.address
+
+    def _canonical(self, message: Message) -> bytes:
+        data = message.to_dict()
+        payload = dict(data.get("payload", {}))
+        payload.pop("_sig", None)
+        payload.pop("_pk", None)
+        data["payload"] = payload
+        return repr(sorted(data.items())).encode("utf-8")
+
+    async def start(self, on_message) -> None:
+        self._on_message = on_message
+        await self._inner.start(self._recv)
+
+    async def _recv(self, message: Message) -> None:
+        payload = message.payload if isinstance(message.payload, dict) else {}
+        sig_hex = payload.pop("_sig", None)
+        pk_hex = payload.pop("_pk", None)
+        if not sig_hex or not pk_hex:
+            self.rejected += 1
+            return
+        try:
+            pk = bytes.fromhex(pk_hex)
+            sig = bytes.fromhex(sig_hex)
+        except ValueError:
+            self.rejected += 1
+            return
+        # Identity binding: src must be the fingerprint of the presented key.
+        if crypto.fingerprint(pk) != message.src:
+            self.rejected += 1
+            return
+        if not crypto.verify(pk, self._canonical(message), sig):
+            self.rejected += 1
+            return
+        if self._on_message is not None:
+            await self._on_message(message)
+
+    async def send(self, address: str, message: Message) -> None:
+        message.payload = dict(message.payload)
+        sig = crypto.sign(self._sk, self._pk, self._canonical(message))
+        message.payload["_sig"] = sig.hex()
+        message.payload["_pk"] = self._pk_hex
+        await self._inner.send(address, message)
+
+    async def stop(self) -> None:
+        await self._inner.stop()
+
+
+# -- ChaCha20 encrypted transport (confidentiality + integrity) ------------
+
+class EncryptedTransport(Transport):
+    """Transport decorator providing authenticated encryption of the wire.
+
+    Each outbound message is serialised, encrypted with ChaCha20 under a shared
+    key and tagged with HMAC-SHA256 (encrypt-then-MAC). On the wire only an
+    opaque ciphertext envelope is visible; the receiver verifies the tag, then
+    decrypts and reconstructs the original message. Tampered or wrongly-keyed
+    frames are dropped.
+    """
+
+    ENVELOPE = "__enc__"
+
+    def __init__(self, inner: Transport, key: bytes) -> None:
+        if len(key) != 32:
+            raise ValueError("key must be 32 bytes")
+        self._inner = inner
+        self._key = key
+        self._on_message = None
+        self.rejected = 0
+
+    @property
+    def address(self) -> str:
+        return self._inner.address
+
+    async def start(self, on_message) -> None:
+        self._on_message = on_message
+        await self._inner.start(self._recv)
+
+    async def send(self, address: str, message: Message) -> None:
+        plaintext = message.to_bytes()
+        nonce = os.urandom(12)
+        ct = crypto.chacha20(self._key, nonce, plaintext)
+        mac = hmac.new(self._key, nonce + ct, hashlib.sha256).hexdigest()
+        envelope = Message(
+            type=self.ENVELOPE,
+            src=message.src,
+            payload={"n": nonce.hex(), "ct": ct.hex(), "mac": mac},
+        )
+        await self._inner.send(address, envelope)
+
+    async def _recv(self, message: Message) -> None:
+        if message.type != self.ENVELOPE:
+            # Unencrypted traffic is not accepted on an encrypted channel.
+            self.rejected += 1
+            return
+        try:
+            nonce = bytes.fromhex(message.payload["n"])
+            ct = bytes.fromhex(message.payload["ct"])
+            mac = message.payload["mac"]
+        except (KeyError, ValueError):
+            self.rejected += 1
+            return
+        expected = hmac.new(self._key, nonce + ct, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(mac, expected):
+            self.rejected += 1
+            return
+        plaintext = crypto.chacha20(self._key, nonce, ct)
+        inner = Message.from_bytes(plaintext)
+        if self._on_message is not None:
+            await self._on_message(inner)
 
     async def stop(self) -> None:
         await self._inner.stop()
