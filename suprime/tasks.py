@@ -104,6 +104,23 @@ class TaskBoard:
         self._handlers: Dict[str, Handler] = {}
         self._executed: set[str] = set()
         self._claim_age: Dict[str, int] = {}
+        self._claim_sig: Dict[str, frozenset] = {}
+        # Stigmergic load balancing: busy nodes stamp a larger claim time, so
+        # idle nodes win claims. The claim timestamp is the swarm's shared
+        # medium (the stigmergic trace) — no node ever asks another its load.
+        self._load_provider: Optional[Callable[[], float]] = None
+        self._load_weight: float = 0.0
+
+    def set_load_model(self, load_provider: Callable[[], float], weight: float) -> None:
+        """Enable load-aware claiming.
+
+        Args:
+            load_provider: Returns this node's current load (higher = busier).
+            weight: Seconds of claim delay per unit of load. Larger values make
+                the swarm favour idle nodes more aggressively.
+        """
+        self._load_provider = load_provider
+        self._load_weight = weight
 
     # -- registration & submission -----------------------------------------
 
@@ -165,23 +182,34 @@ class TaskBoard:
         for task in self.tasks():
             if task.state is not TaskState.PENDING:
                 self._claim_age.pop(task.id, None)
+                self._claim_sig.pop(task.id, None)
                 continue
             if task.kind not in self._handlers:
                 continue
             self._maybe_claim(task)
-            # Let claims settle for a few rounds before anyone executes, so the
-            # winner is chosen from a converged claim set (avoids duplicate runs).
+            # Let claims settle before anyone executes so the winner is chosen
+            # from a *converged* claim set. Two conditions must hold:
+            #   1. the claim has aged a minimum number of rounds, and
+            #   2. the observed claim set is stable (unchanged since last round).
+            # Together these avoid duplicate execution even when the winner is
+            # not the first node to claim (e.g. under stigmergic load balancing).
             age = self._claim_age.get(task.id, 0) + 1
             self._claim_age[task.id] = age
-            if age < self._claim_grace_rounds:
+            sig = frozenset(self._claims(task.id).items())
+            stable = sig == self._claim_sig.get(task.id)
+            self._claim_sig[task.id] = sig
+            if age < self._claim_grace_rounds or not stable:
                 continue
             await self._maybe_execute(task)
 
     def _maybe_claim(self, task: Task) -> None:
         claim_key = CLAIM_PREFIX + task.id + "/" + self._node_id
         if claim_key not in self._store:
+            claim_ts = self._clock()
+            if self._load_provider is not None and self._load_weight:
+                claim_ts += self._load_provider() * self._load_weight
             self._store.set(
-                claim_key, {"node_id": self._node_id, "claim_ts": self._clock()}
+                claim_key, {"node_id": self._node_id, "claim_ts": claim_ts}
             )
 
     async def _maybe_execute(self, task: Task) -> None:
