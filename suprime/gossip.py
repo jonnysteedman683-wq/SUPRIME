@@ -45,6 +45,7 @@ class GossipService:
         store: DistributedStore,
         fanout: int = 3,
         rng: random.Random | None = None,
+        include_store: bool = True,
     ) -> None:
         self._self_id = self_id
         self._address_provider: Callable[[], str] = (
@@ -55,6 +56,9 @@ class GossipService:
         self._fanout = fanout
         self._rng = rng or random.Random()
         self._heartbeat = 0
+        # When False, gossip carries only membership; state replication is left
+        # to a dedicated layer (e.g. Merkle anti-entropy).
+        self._include_store = include_store
 
     @property
     def heartbeat(self) -> int:
@@ -82,7 +86,8 @@ class GossipService:
                 "heartbeat": self._heartbeat,
             }
         )
-        return {"membership": membership, "store": self._store.digest()}
+        store = self._store.digest() if self._include_store else {}
+        return {"membership": membership, "store": store}
 
     def make_message(self, msg_type: str = MessageType.GOSSIP) -> Message:
         return Message(type=msg_type, src=self._self_id, payload=self.build_digest())

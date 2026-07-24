@@ -125,6 +125,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dash.add_argument("--nodes", type=int, default=6, help="number of nodes")
     dash.add_argument("--duration", type=float, default=30.0, help="run time (s)")
+
+    bench = sub.add_parser(
+        "bench",
+        help="run scale/performance benchmarks and write an HTML chart report",
+    )
+    bench.add_argument("--out", default="bench_report.html", help="report output path")
     return parser
 
 
@@ -143,6 +149,10 @@ def main(argv: List[str] | None = None) -> None:
             asyncio.run(run_dashboard(n_nodes=args.nodes, duration=args.duration))
         except KeyboardInterrupt:  # pragma: no cover
             pass
+    elif args.command == "bench":
+        from .bench import main as bench_main
+
+        bench_main(args.out)
 
 
 if __name__ == "__main__":  # pragma: no cover

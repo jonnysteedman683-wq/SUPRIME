@@ -19,6 +19,11 @@ From that single channel, higher-level behaviour *emerges*:
 - 🧪 **An experimental toolkit** — a chaos/partition harness, push-sum
   aggregation, stigmergic load balancing, a self-healing Plumtree/HyParView
   overlay, and a live terminal dashboard (see [Experimental features](#experimental-features)).
+- 🔬 **A research toolkit** — causal CRDTs (incl. a collaborative-text RGA),
+  HMAC-authenticated transport with proof-of-work Sybil resistance,
+  Byzantine-tolerant trust-weighted agreement, Merkle anti-entropy, decentralised
+  federated learning, topic pub/sub, and a benchmark suite (see
+  [Advanced toolkit](#advanced-toolkit)).
 
 It is intentionally small, dependency-free (pure Python standard library) and
 readable — a working laboratory for distributed-systems ideas.
@@ -117,6 +122,15 @@ replication, distributed task execution and leader failover end to end.
 | `suprime/plumtree.py` | Self-optimising epidemic broadcast trees. |
 | `suprime/hyparview.py` | Bounded-degree, self-healing partial-view membership. |
 | `suprime/dashboard.py` | Live terminal dashboard of a chaos swarm. |
+| `suprime/crdt.py` | CRDT toolkit: G/PN-counters, OR-set, LWW-map, vector clocks, MV-register. |
+| `suprime/rga.py` | RGA sequence CRDT for collaborative text/logs. |
+| `suprime/replicate.py` | Replicate any CRDT across the swarm over gossip. |
+| `suprime/security.py` | HMAC-authenticated transport + proof-of-work identities. |
+| `suprime/byzantine.py` | Trust-weighted, quorum-based Byzantine-tolerant agreement. |
+| `suprime/antientropy.py` | Merkle-style delta reconciliation for the store. |
+| `suprime/learning.py` | Decentralised federated learning (gossip SGD). |
+| `suprime/pubsub.py` | Topic publish/subscribe over Plumtree. |
+| `suprime/bench.py` + `svg.py` | Scale/perf benchmarks + dependency-free SVG charts. |
 
 ### How coordination emerges
 
@@ -198,6 +212,94 @@ Runs an in-process chaos swarm and renders membership, the leader, replicated
 state, a push-sum aggregate and chaos counters in real time — scripted to go
 steady → partitioned → healed so you can watch it split and reconverge.
 
+## Advanced toolkit
+
+Deeper, research-grade building blocks. See `examples/advanced.py` for a tour.
+
+### CRDT toolkit + causal consistency
+
+Mergeable data types that converge under any ordering: `GCounter`, `PNCounter`,
+`ORSet`, `LWWMap`, plus `VectorClock` and an `MVRegister` that *surfaces*
+concurrent writes instead of silently dropping one. Replicate any of them across
+the swarm with `CRDTReplicator`.
+
+```python
+from suprime import PNCounter, CRDTReplicator
+rep = CRDTReplicator(node)
+votes = rep.register("votes", PNCounter(node.id))
+votes.increment(3)        # converges to the swarm-wide total everywhere
+```
+
+### Collaborative text (RGA)
+
+`RGA` is a sequence CRDT: concurrent inserts/deletes from many nodes converge to
+one document — a shared, editable log with no central authority.
+
+```python
+from suprime import RGA
+doc = RGA(node.id); doc.append("h"); doc.insert(1, "i")   # -> "hi"
+```
+
+### Authentication + Sybil resistance
+
+`SecureTransport` HMAC-signs every frame with a shared cluster key and drops
+anything forged or tampered. `mint_identity` / `verify_identity` add a
+hashcash-style proof of work so creating fake identities is deliberately costly.
+
+```python
+from suprime import SecureTransport, mint_identity, verify_identity
+node = SwarmNode(transport=SecureTransport(inner, b"cluster-key"), ...)
+ident = mint_identity("node-x", difficulty=16)   # costly to mint, cheap to check
+assert verify_identity(ident, min_difficulty=16)
+```
+
+### Byzantine-tolerant agreement
+
+`ByzantineConsensus` accepts a value only when it holds a **trust-weighted
+quorum**; nodes that vote against the accepted value lose reputation, so liars
+get progressively ignored.
+
+```python
+from suprime import ByzantineConsensus
+byz = ByzantineConsensus(node, quorum=0.5)
+byz.vote("answer", 42)
+byz.accepted("answer")     # -> 42 despite a minority of lying nodes
+```
+
+### Merkle anti-entropy
+
+Reconcile stores by exchanging **only diffs**: nodes compare per-bucket Merkle
+hashes and transfer full entries just for buckets that differ — O(diff) bandwidth
+instead of O(state). Pair with `SwarmNode(gossip_store=False)` to let gossip
+carry membership while anti-entropy carries state.
+
+### Decentralised federated learning
+
+`GossipLearner` trains a model on each node's private data and gossip-averages
+weights with peers — the swarm converges on a shared model as if the data were
+pooled, but data never leaves its node.
+
+```python
+from suprime import GossipLearner, LinearModel
+GossipLearner(node, LinearModel(dim), local_data, lr=0.3)
+```
+
+### Pub/sub
+
+`PubSub` is a decentralised topic event bus over Plumtree — publishes reach the
+whole swarm efficiently, delivered locally only to a topic's subscribers.
+
+### Benchmarks
+
+```bash
+python -m suprime bench --out report.html
+```
+
+Runs scaling benchmarks in-process and writes an HTML report with SVG charts:
+gossip convergence vs swarm size (~O(log N)), push-sum error decaying to zero,
+and Plumtree using **N−1** payload copies per broadcast vs flooding's N·(N−1)
+(80–97% fewer messages as the swarm grows).
+
 ## Tests
 
 ```bash
@@ -208,13 +310,19 @@ The suite runs whole swarms deterministically over the in-memory transport
 (driving gossip rounds by hand against a manual clock) and also verifies the
 real TCP transport end to end. It covers discovery, bidirectional replication,
 distributed task execution, leader failover, chaos partition/heal reconvergence,
-push-sum convergence, stigmergic balancing, and the Plumtree/HyParView overlay.
+push-sum convergence, stigmergic balancing, the Plumtree/HyParView overlay, CRDT
+convergence, RGA collaborative text, authenticated transport + proof of work,
+Byzantine-tolerant agreement, Merkle anti-entropy, federated-learning convergence,
+pub/sub delivery, and the benchmark harness.
 
 ## Status
 
 Experimental. This is a compact reference implementation for exploring swarm and
-gossip-based distributed-systems techniques, not a hardened production runtime
-(no encryption, authentication or Byzantine-fault tolerance yet).
+gossip-based distributed-systems techniques, not a hardened production runtime.
+It ships integrity/authentication (HMAC), proof-of-work Sybil resistance and
+trust-weighted Byzantine tolerance, but not transport encryption or full BFT
+consensus; public-key identities (Ed25519) would need a third-party crypto
+dependency.
 
 ## License
 
