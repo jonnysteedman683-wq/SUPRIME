@@ -21,15 +21,30 @@ Quick start::
 """
 
 from .aggregate import PushSumAggregator
+from .antientropy import AntiEntropy
+from .byzantine import ByzantineConsensus, QuorumRegister, TrustLedger
 from .chaos import ChaosController, ChaosTransport
 from .consensus import LeaderView, elect_leader
+from .crdt import (
+    GCounter,
+    LWWMap,
+    MVRegister,
+    ORSet,
+    PNCounter,
+    VectorClock,
+)
 from .gossip import GossipService
 from .hyparview import HyParView
 from .identity import NodeID
+from .learning import GossipLearner, LinearModel
 from .message import Message, MessageType
 from .node import SwarmNode
 from .peers import Peer, PeerState, PeerTable
 from .plumtree import PlumtreeBroadcast
+from .pubsub import PubSub
+from .replicate import CRDTReplicator
+from .rga import RGA
+from .security import Identity, SecureTransport, mint_identity, verify_identity
 from .store import DistributedStore, Entry, Version
 from .tasks import Task, TaskBoard, TaskState
 from .transport import InMemoryTransport, TcpTransport, Transport, TransportError
@@ -62,5 +77,24 @@ __all__ = [
     "PushSumAggregator",
     "PlumtreeBroadcast",
     "HyParView",
+    "PubSub",
+    "AntiEntropy",
+    "CRDTReplicator",
+    "GCounter",
+    "PNCounter",
+    "ORSet",
+    "LWWMap",
+    "MVRegister",
+    "VectorClock",
+    "RGA",
+    "SecureTransport",
+    "Identity",
+    "mint_identity",
+    "verify_identity",
+    "TrustLedger",
+    "QuorumRegister",
+    "ByzantineConsensus",
+    "GossipLearner",
+    "LinearModel",
     "__version__",
 ]

@@ -53,6 +53,7 @@ class SwarmNode:
         suspect_after: float = 3.0,
         dead_after: float = 6.0,
         claim_grace_rounds: int = 3,
+        gossip_store: bool = True,
         rng: Optional[random.Random] = None,
         clock: Callable[[], float] = time.time,
         monotonic: Callable[[], float] = time.monotonic,
@@ -80,6 +81,7 @@ class SwarmNode:
             self.store,
             fanout=fanout,
             rng=rng or random.Random(),
+            include_store=gossip_store,
         )
         self._leader_view = LeaderView(self.id)
 
