@@ -20,12 +20,16 @@ Quick start::
     asyncio.run(main())
 """
 
+from .aggregate import PushSumAggregator
+from .chaos import ChaosController, ChaosTransport
 from .consensus import LeaderView, elect_leader
 from .gossip import GossipService
+from .hyparview import HyParView
 from .identity import NodeID
 from .message import Message, MessageType
 from .node import SwarmNode
 from .peers import Peer, PeerState, PeerTable
+from .plumtree import PlumtreeBroadcast
 from .store import DistributedStore, Entry, Version
 from .tasks import Task, TaskBoard, TaskState
 from .transport import InMemoryTransport, TcpTransport, Transport, TransportError
@@ -53,5 +57,10 @@ __all__ = [
     "GossipService",
     "LeaderView",
     "elect_leader",
+    "ChaosController",
+    "ChaosTransport",
+    "PushSumAggregator",
+    "PlumtreeBroadcast",
+    "HyParView",
     "__version__",
 ]

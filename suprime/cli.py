@@ -118,6 +118,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KIND",
         help="register a demo handler for this task kind (repeatable)",
     )
+
+    dash = sub.add_parser(
+        "dashboard",
+        help="run a live in-process chaos swarm with a terminal dashboard",
+    )
+    dash.add_argument("--nodes", type=int, default=6, help="number of nodes")
+    dash.add_argument("--duration", type=float, default=30.0, help="run time (s)")
     return parser
 
 
@@ -127,6 +134,13 @@ def main(argv: List[str] | None = None) -> None:
     if args.command == "run":
         try:
             asyncio.run(_run(args))
+        except KeyboardInterrupt:  # pragma: no cover
+            pass
+    elif args.command == "dashboard":
+        from .dashboard import run_dashboard
+
+        try:
+            asyncio.run(run_dashboard(n_nodes=args.nodes, duration=args.duration))
         except KeyboardInterrupt:  # pragma: no cover
             pass
 

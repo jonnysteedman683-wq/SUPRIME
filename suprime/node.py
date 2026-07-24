@@ -88,6 +88,7 @@ class SwarmNode:
         self._running = False
         self._loop_task: Optional[asyncio.Task] = None
         self._seen_messages: "set[str]" = set()
+        self._tick_hooks: List[Callable[[], Awaitable[None]]] = []
 
     # -- properties ---------------------------------------------------------
 
@@ -170,8 +171,21 @@ class SwarmNode:
         self.gossip.bump_heartbeat()
         self.peers.tick()
         self._update_leader()
-        await self.gossip_once()
+        # Advance task coordination *before* gossiping so any claim or result
+        # written this round is disseminated in the same round's digest, which
+        # keeps claim state converging quickly (important for exactly-once).
         await self.tasks.evaluate()
+        await self.gossip_once()
+        for hook in self._tick_hooks:
+            await hook()
+
+    def on_tick(self, hook: Callable[[], Awaitable[None]]) -> None:
+        """Register an async callback run at the end of every swarm tick.
+
+        Extension services (aggregation, epidemic broadcast, …) use this to be
+        driven by the same clock as the core swarm without subclassing.
+        """
+        self._tick_hooks.append(hook)
 
     async def gossip_once(self) -> None:
         """Push a gossip digest to a random fanout of peers."""
@@ -234,6 +248,22 @@ class SwarmNode:
     def on_leader_change(self, callback: Callable[[str], None]) -> None:
         """Register a callback invoked with the new leader id on each change."""
         self._leader_callbacks.append(callback)
+
+    async def send_to(
+        self, address: str, msg_type: str, payload: Optional[Dict] = None, dst: Optional[str] = None
+    ) -> bool:
+        """Send an application message to a raw transport address.
+
+        Unlike :meth:`send`, this does not require the target to be in the
+        membership table — overlays that keep their own address book (e.g.
+        HyParView) route through here. Returns ``False`` on delivery failure.
+        """
+        message = Message(type=msg_type, src=self.id, dst=dst, payload=payload or {})
+        try:
+            await self._transport.send(address, message)
+            return True
+        except Exception:  # noqa: BLE001
+            return False
 
     async def send(self, node_id: str, msg_type: str, payload: Optional[Dict] = None) -> bool:
         """Send an application message directly to a known node.

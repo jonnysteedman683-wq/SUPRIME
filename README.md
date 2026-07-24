@@ -16,6 +16,9 @@ From that single channel, higher-level behaviour *emerges*:
   live membership, with automatic failover when it dies.
 - 🔌 **Pluggable transport** — real TCP for deployment, an in-memory transport
   for running an entire swarm (and its tests) inside one process.
+- 🧪 **An experimental toolkit** — a chaos/partition harness, push-sum
+  aggregation, stigmergic load balancing, a self-healing Plumtree/HyParView
+  overlay, and a live terminal dashboard (see [Experimental features](#experimental-features)).
 
 It is intentionally small, dependency-free (pure Python standard library) and
 readable — a working laboratory for distributed-systems ideas.
@@ -108,7 +111,12 @@ replication, distributed task execution and leader failover end to end.
 | `suprime/tasks.py` | Decentralised task submission, claiming and execution. |
 | `suprime/consensus.py` | Deterministic leader election over live members. |
 | `suprime/node.py` | The `SwarmNode` that composes it all. |
-| `suprime/cli.py` | `python -m suprime run` — a real TCP node. |
+| `suprime/cli.py` | `python -m suprime run` / `dashboard`. |
+| `suprime/chaos.py` | Fault injector: latency, drops, duplication, partitions. |
+| `suprime/aggregate.py` | Push-sum decentralised aggregation (avg/sum/count). |
+| `suprime/plumtree.py` | Self-optimising epidemic broadcast trees. |
+| `suprime/hyparview.py` | Bounded-degree, self-healing partial-view membership. |
+| `suprime/dashboard.py` | Live terminal dashboard of a chaos swarm. |
 
 ### How coordination emerges
 
@@ -125,6 +133,71 @@ node computes the same winner (earliest claim, ties broken by node id) and only
 that node executes. Execution is at-least-once, so handlers should be
 idempotent.
 
+## Experimental features
+
+Beyond the core swarm, SUPRIME ships a set of research-grade building blocks.
+See `examples/experimental.py` for all of them in one run.
+
+### Chaos harness
+
+Wrap any transport in a `ChaosTransport` bound to a shared `ChaosController` to
+inject latency, jitter, message drops, duplication and **network partitions** at
+runtime — then heal them and watch the swarm reconverge.
+
+```python
+from suprime import ChaosController, ChaosTransport
+chaos = ChaosController(drop_rate=0.1, latency=0.02)
+node = SwarmNode(transport=ChaosTransport(inner, chaos), ...)
+chaos.partition(group_a_addrs, group_b_addrs)   # split the brain
+chaos.heal()                                    # ...and reunite it
+```
+
+### Push-sum aggregation
+
+Compute swarm-wide **averages, sums and counts** with no coordinator, converging
+exponentially fast. Mass is conserved, so the estimate is unbiased under
+reordering.
+
+```python
+from suprime import PushSumAggregator
+agg = PushSumAggregator(node)
+agg.average("load", local_load)      # every node → estimate() converges to the mean
+```
+
+### Stigmergic load balancing
+
+Nodes stamp a load-proportional delay into their task claims, so **idle nodes win
+work** — self-balancing coordination through the shared claim medium, no node
+ever querying another.
+
+```python
+node.tasks.set_load_model(lambda: current_load(), weight=0.01)
+```
+
+### Self-healing topology (Plumtree + HyParView)
+
+For swarms too large for full membership: **HyParView** keeps a bounded active
+view (an overlay of ~log N links) that self-heals on failure, and **Plumtree**
+broadcasts over it as a spanning tree with lazy-gossip repair — O(N) message
+copies instead of O(N·fanout), while staying robust.
+
+```python
+from suprime import HyParView, PlumtreeBroadcast
+overlay = HyParView(node)
+bcast = PlumtreeBroadcast(node, neighbors=lambda: list(overlay.active))
+await bcast.broadcast({"event": "..."})   # reaches everyone, exactly once
+```
+
+### Live dashboard
+
+```bash
+python -m suprime dashboard --nodes 8
+```
+
+Runs an in-process chaos swarm and renders membership, the leader, replicated
+state, a push-sum aggregate and chaos counters in real time — scripted to go
+steady → partitioned → healed so you can watch it split and reconverge.
+
 ## Tests
 
 ```bash
@@ -133,8 +206,9 @@ pytest -q
 
 The suite runs whole swarms deterministically over the in-memory transport
 (driving gossip rounds by hand against a manual clock) and also verifies the
-real TCP transport end to end — discovery, bidirectional replication,
-distributed task execution and leader failover.
+real TCP transport end to end. It covers discovery, bidirectional replication,
+distributed task execution, leader failover, chaos partition/heal reconvergence,
+push-sum convergence, stigmergic balancing, and the Plumtree/HyParView overlay.
 
 ## Status
 
