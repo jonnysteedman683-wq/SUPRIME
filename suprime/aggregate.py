@@ -36,9 +36,7 @@ class _Mass:
         self.w += other.w
 
     def half(self) -> "_Mass":
-        self.s /= 2.0
-        self.w /= 2.0
-        return _Mass(self.s, self.w)
+        return _Mass(self.s / 2.0, self.w / 2.0)
 
 
 class PushSumAggregator:
