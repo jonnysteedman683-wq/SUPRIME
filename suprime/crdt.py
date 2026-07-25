@@ -273,16 +273,28 @@ class MVRegister:
         combined = self._versions + other._versions
         # Keep only versions not dominated by another (causal maxima).
         kept: List[Tuple[Any, VectorClock]] = []
-        for i, (val, vc) in enumerate(combined):
+        for val, vc in combined:
             dominated = False
-            for j, (_, other_vc) in enumerate(combined):
-                if i != j and vc.compare(other_vc) == "before":
+            to_remove = set()
+            is_duplicate = False
+
+            for i, (k_val, k_vc) in enumerate(kept):
+                comp = vc.compare(k_vc)
+                if comp == "before":
                     dominated = True
                     break
-            if dominated:
+                elif comp == "after":
+                    to_remove.add(i)
+                elif comp == "equal" and val == k_val:
+                    is_duplicate = True
+                    break
+
+            if dominated or is_duplicate:
                 continue
-            if not any(vc.compare(k_vc) == "equal" and val == k_val for k_val, k_vc in kept):
-                kept.append((val, vc))
+
+            if to_remove:
+                kept = [k for i, k in enumerate(kept) if i not in to_remove]
+            kept.append((val, vc))
         changed = {id(v) for v in kept} != {id(v) for v in self._versions}
         self._versions = kept
         self._vc = self._vc.merge(other._vc)
