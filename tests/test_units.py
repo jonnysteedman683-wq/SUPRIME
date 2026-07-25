@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import pytest
 import itertools
 
 
@@ -9,6 +11,7 @@ from suprime.consensus import LeaderView, elect_leader
 from suprime.message import Message, MessageType
 from suprime.peers import PeerState, PeerTable
 from suprime.store import DistributedStore, Entry, Version
+from suprime.identity import NodeID
 
 
 # -- message ---------------------------------------------------------------
@@ -140,3 +143,34 @@ def test_leader_view_reports_transitions():
     assert lv.is_leader() is False
     assert lv.update([]) == "m"  # a left -> leadership returns
     assert lv.is_leader() is True
+
+# -- identity --------------------------------------------------------------
+
+def test_nodeid_generate():
+    """Verify NodeID generate creates valid, unique IDs."""
+    node1 = NodeID.generate()
+    node2 = NodeID.generate()
+
+    # Must be instances of NodeID
+    assert isinstance(node1, NodeID)
+
+    # Must be unique
+    assert node1 != node2
+
+    # Default prefix and pid must be present
+    assert node1.value.startswith(f"node-{os.getpid()}-")
+
+    # Custom prefix support
+    custom_node = NodeID.generate(prefix="test-prefix")
+    assert custom_node.value.startswith(f"test-prefix-{os.getpid()}-")
+
+
+def test_nodeid_validation():
+    """Verify NodeID validates its input correctly."""
+    # Empty string should fail
+    with pytest.raises(ValueError, match="NodeID value must be a non-empty string"):
+        NodeID("")
+
+    # None should fail
+    with pytest.raises(ValueError, match="NodeID value must be a non-empty string"):
+        NodeID(None)  # type: ignore
