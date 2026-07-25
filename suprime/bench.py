@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from .aggregate import PushSumAggregator
 from .message import Message

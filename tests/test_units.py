@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import itertools
 
-import pytest
 
 from suprime.consensus import LeaderView, elect_leader
 from suprime.message import Message, MessageType
@@ -56,7 +55,7 @@ def test_store_merge_is_convergent_regardless_of_order():
         entries = []
         for j, r in enumerate(replicas):
             r.set("k", f"v{j}")
-            entries.append((f"k", r.digest()["k"]))
+            entries.append(("k", r.digest()["k"]))
         # apply the three writes to a fresh replica in this permutation's order
         target = DistributedStore("t")
         for j in order:

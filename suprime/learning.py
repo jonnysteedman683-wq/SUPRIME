@@ -15,7 +15,7 @@ on the intuition behind push-sum (gossip averaging of vectors).
 from __future__ import annotations
 
 import random
-from typing import Callable, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 from .message import Message
 

@@ -15,6 +15,7 @@ its bytes travel.
 from __future__ import annotations
 
 import asyncio
+import gzip
 import struct
 from typing import Awaitable, Callable, Dict, Optional
 
@@ -103,8 +104,15 @@ class TcpTransport(Transport):
     """
 
     _HEADER = struct.Struct(">I")
+    _FLAG_GZIP = 0x01
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 0) -> None:
+    def __init__(
+        self,
+        host: str = "127.0.0.1",
+        port: int = 0,
+        max_frame_size: int = 16 * 1024 * 1024,
+        compress_over: int = 1024,
+    ) -> None:
         self._host = host
         self._port = port
         self.address = f"{host}:{port}"
@@ -112,6 +120,10 @@ class TcpTransport(Transport):
         self._on_message: Optional[MessageHandler] = None
         self._conns: Dict[str, asyncio.StreamWriter] = {}
         self._lock = asyncio.Lock()
+        #: Reject inbound frames larger than this (guards against OOM / bad peers).
+        self._max_frame = max_frame_size
+        #: gzip-compress bodies larger than this many bytes (0 disables).
+        self._compress_over = compress_over
 
     async def start(self, on_message: MessageHandler) -> None:
         self._on_message = on_message
@@ -123,6 +135,22 @@ class TcpTransport(Transport):
         self._host, self._port = sock.getsockname()[:2]
         self.address = f"{self._host}:{self._port}"
 
+    def _encode_frame(self, message: Message) -> bytes:
+        body = message.to_bytes()
+        flag = 0
+        if self._compress_over and len(body) > self._compress_over:
+            compressed = gzip.compress(body)
+            if len(compressed) < len(body):
+                body, flag = compressed, self._FLAG_GZIP
+        payload = bytes([flag]) + body
+        return self._HEADER.pack(len(payload)) + payload
+
+    def _decode_body(self, payload: bytes) -> Message:
+        flag, body = payload[0], payload[1:]
+        if flag & self._FLAG_GZIP:
+            body = gzip.decompress(body)
+        return Message.from_bytes(body)
+
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
@@ -130,8 +158,11 @@ class TcpTransport(Transport):
             while True:
                 header = await reader.readexactly(self._HEADER.size)
                 (length,) = self._HEADER.unpack(header)
-                body = await reader.readexactly(length)
-                message = Message.from_bytes(body)
+                if length > self._max_frame or length < 1:
+                    # Oversized/garbage frame: drop the connection defensively.
+                    break
+                payload = await reader.readexactly(length)
+                message = self._decode_body(payload)
                 if self._on_message is not None:
                     await self._on_message(message)
         except (asyncio.IncompleteReadError, ConnectionError):
@@ -153,15 +184,23 @@ class TcpTransport(Transport):
             return writer
 
     async def send(self, address: str, message: Message) -> None:
-        writer = await self._connect(address)
-        body = message.to_bytes()
-        frame = self._HEADER.pack(len(body)) + body
-        try:
-            writer.write(frame)
-            await writer.drain()
-        except ConnectionError as exc:  # pragma: no cover - network dependent
-            self._conns.pop(address, None)
-            raise TransportError(f"send to {address} failed: {exc}") from exc
+        frame = self._encode_frame(message)
+        # Try once, then transparently reconnect and retry once — a cached
+        # connection may have been closed by the peer since we last used it.
+        for attempt in (1, 2):
+            writer = await self._connect(address)
+            try:
+                writer.write(frame)
+                await writer.drain()
+                return
+            except (ConnectionError, OSError) as exc:
+                self._conns.pop(address, None)
+                try:
+                    writer.close()
+                except Exception:
+                    pass
+                if attempt == 2:
+                    raise TransportError(f"send to {address} failed: {exc}") from exc
 
     async def stop(self) -> None:
         for writer in list(self._conns.values()):

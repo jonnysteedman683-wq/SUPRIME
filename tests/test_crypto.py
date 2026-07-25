@@ -24,6 +24,19 @@ def test_ed25519_sign_verify_roundtrip():
     assert not crypto.verify(pk2, msg, sig)         # wrong key
 
 
+def test_ed25519_backends_interoperate():
+    # Whatever the active backend, it must agree byte-for-byte with the
+    # pure-Python reference (RFC 8032 determinism) so mixed-backend swarms work.
+    assert crypto.BACKEND in ("cryptography", "pure-python")
+    sk = b"\x07" * 32
+    pk_pure = crypto._pure_publickey(sk)
+    assert crypto.publickey(sk) == pk_pure
+    msg = b"cross-backend"
+    sig_pure = crypto._pure_sign(sk, pk_pure, msg)
+    assert crypto.verify(pk_pure, msg, sig_pure)          # active verifies pure
+    assert crypto._pure_verify(pk_pure, msg, crypto.sign(sk, pk_pure, msg))
+
+
 def test_chacha20_roundtrip_and_rfc_vector():
     key, nonce = b"k" * 32, b"n" * 12
     data = b"attack at dawn" * 10
@@ -65,7 +78,6 @@ async def test_signed_transport_authentic_messages_flow():
 async def test_signed_transport_rejects_forged_identity():
     reg: dict = {}
     sk, pk = crypto.generate_keypair()
-    real_id = crypto.fingerprint(pk)
     victim = SwarmNode(
         transport=SignedTransport(InMemoryTransport("victim", registry=reg), *crypto.generate_keypair()[:2]),
         node_id="victim",
