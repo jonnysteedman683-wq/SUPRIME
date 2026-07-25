@@ -112,6 +112,7 @@ class TcpTransport(Transport):
         port: int = 0,
         max_frame_size: int = 16 * 1024 * 1024,
         compress_over: int = 1024,
+        connect_timeout: float = 3.0,
     ) -> None:
         self._host = host
         self._port = port
@@ -119,11 +120,16 @@ class TcpTransport(Transport):
         self._server: Optional[asyncio.AbstractServer] = None
         self._on_message: Optional[MessageHandler] = None
         self._conns: Dict[str, asyncio.StreamWriter] = {}
+        self._inbound: "set[asyncio.StreamWriter]" = set()
+        self._closed = False
         self._lock = asyncio.Lock()
         #: Reject inbound frames larger than this (guards against OOM / bad peers).
         self._max_frame = max_frame_size
         #: gzip-compress bodies larger than this many bytes (0 disables).
         self._compress_over = compress_over
+        #: Bound how long a connect may block, so a dead/slow peer can't stall
+        #: the caller (e.g. the gossip/SWIM tick loop) indefinitely.
+        self._connect_timeout = connect_timeout
 
     async def start(self, on_message: MessageHandler) -> None:
         self._on_message = on_message
@@ -154,8 +160,9 @@ class TcpTransport(Transport):
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ) -> None:
+        self._inbound.add(writer)
         try:
-            while True:
+            while not self._closed:
                 header = await reader.readexactly(self._HEADER.size)
                 (length,) = self._HEADER.unpack(header)
                 if length > self._max_frame or length < 1:
@@ -163,24 +170,34 @@ class TcpTransport(Transport):
                     break
                 payload = await reader.readexactly(length)
                 message = self._decode_body(payload)
-                if self._on_message is not None:
+                # A stopped node must stay silent, even on a still-open socket.
+                if self._on_message is not None and not self._closed:
                     await self._on_message(message)
         except (asyncio.IncompleteReadError, ConnectionError):
             pass
         finally:
+            self._inbound.discard(writer)
             writer.close()
 
     async def _connect(self, address: str) -> asyncio.StreamWriter:
         async with self._lock:
-            writer = self._conns.get(address)
-            if writer is not None and not writer.is_closing():
-                return writer
+            cached = self._conns.get(address)
+            if cached is not None:
+                reader, writer = cached
+                # Reuse only if the link is still healthy: a peer that closed its
+                # end surfaces as EOF on our reader even without a write error.
+                if not writer.is_closing() and not reader.at_eof():
+                    return writer
+                writer.close()
+                self._conns.pop(address, None)
             host, port = address.rsplit(":", 1)
             try:
-                _, writer = await asyncio.open_connection(host, int(port))
-            except OSError as exc:  # pragma: no cover - network dependent
+                reader, writer = await asyncio.wait_for(
+                    asyncio.open_connection(host, int(port)), self._connect_timeout
+                )
+            except (OSError, asyncio.TimeoutError) as exc:  # pragma: no cover - network dependent
                 raise TransportError(f"cannot connect to {address}: {exc}") from exc
-            self._conns[address] = writer
+            self._conns[address] = (reader, writer)
             return writer
 
     async def send(self, address: str, message: Message) -> None:
@@ -203,9 +220,15 @@ class TcpTransport(Transport):
                     raise TransportError(f"send to {address} failed: {exc}") from exc
 
     async def stop(self) -> None:
-        for writer in list(self._conns.values()):
+        self._closed = True
+        # Close outbound connections *and* inbound (server-accepted) ones, so a
+        # stopped node cannot keep answering peers over a still-open socket.
+        for _reader, writer in list(self._conns.values()):
             writer.close()
         self._conns.clear()
+        for writer in list(self._inbound):
+            writer.close()
+        self._inbound.clear()
         if self._server is not None:
             self._server.close()
             await self._server.wait_closed()

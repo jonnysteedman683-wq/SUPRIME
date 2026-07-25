@@ -96,6 +96,20 @@ class PeerTable:
             return True
         return False
 
+    def refresh(self, node_id: str) -> bool:
+        """Mark a peer alive on a direct liveness signal (e.g. a SWIM ACK).
+
+        Unlike :meth:`merge`, this needs no newer heartbeat — an ACK proves the
+        peer is up right now, so we clear any suspicion and reset its staleness
+        timer. Returns ``True`` if the peer is known (and was refreshed).
+        """
+        peer = self._peers.get(node_id)
+        if peer is None:
+            return False
+        peer.last_update = self._clock()
+        peer.state = PeerState.ALIVE
+        return True
+
     def evict(self, node_id: str) -> None:
         self._peers.pop(node_id, None)
 

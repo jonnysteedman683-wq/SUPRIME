@@ -56,6 +56,9 @@ class SwarmNode:
         claim_grace_rounds: int = 3,
         gossip_store: bool = True,
         persist_dir: Optional[str] = None,
+        swim: bool = True,
+        probe_timeout: float = 1.5,
+        indirect_k: int = 2,
         rng: Optional[random.Random] = None,
         clock: Callable[[], float] = time.time,
         monotonic: Callable[[], float] = time.monotonic,
@@ -65,6 +68,12 @@ class SwarmNode:
         self._seeds = list(seeds or [])
         self._gossip_interval = gossip_interval
         self._clock = clock
+        self._monotonic = monotonic
+        # SWIM failure detection: active direct + indirect probing.
+        self._swim = swim
+        self._probe_timeout = probe_timeout
+        self._indirect_k = indirect_k
+        self._probe: Optional[Dict] = None  # current in-flight probe state
 
         self.peers = PeerTable(
             self.id,
@@ -196,6 +205,8 @@ class SwarmNode:
         # it rejoins the swarm, instead of being orphaned forever.
         if self._seeds and len(self.peers) == 0:
             await self._bootstrap()
+        if self._swim:
+            await self._swim_probe()
         self._update_leader()
         # Advance task coordination *before* gossiping so any claim or result
         # written this round is disseminated in the same round's digest, which
@@ -250,6 +261,12 @@ class SwarmNode:
             await self._handle_join(message)
         elif mtype == MessageType.WELCOME:
             self.gossip.apply(message)
+        elif mtype == MessageType.PING:
+            await self._handle_ping(message)
+        elif mtype == MessageType.PING_REQ:
+            await self._handle_ping_req(message)
+        elif mtype == MessageType.ACK:
+            self._handle_ack(message)
         else:
             await self._dispatch_app(message)
 
@@ -268,6 +285,115 @@ class SwarmNode:
     async def _dispatch_app(self, message: Message) -> None:
         for handler in self._app_handlers.get(message.type, []):
             await handler(message)
+
+    # -- SWIM failure detection --------------------------------------------
+
+    async def _swim_probe(self) -> None:
+        """One SWIM probing step: advance any in-flight probe, else start one.
+
+        A direct ``PING`` is escalated to an indirect ``PING_REQ`` through ``k``
+        random peers if unanswered, so a peer is only left to the staleness
+        detector after *both* a direct and an indirect probe go unanswered —
+        which is what suppresses false-positive evictions of slow-but-alive
+        peers. Any ``ACK`` (see :meth:`_handle_ack`) refreshes the subject.
+        """
+        now = self._monotonic()
+        probe = self._probe
+        if probe is not None:
+            target = probe["target"]
+            if self.peers.get(target) is None:
+                self._probe = None  # target already gone
+            elif now - probe["sent_at"] >= self._probe_timeout:
+                if probe["phase"] == "direct":
+                    await self._send_ping_reqs(target)
+                    probe["phase"] = "indirect"
+                    probe["sent_at"] = now
+                else:
+                    # Direct + indirect both timed out; hand off to staleness FD.
+                    self._probe = None
+
+        if self._probe is None:
+            target = self._pick_probe_target()
+            if target is not None:
+                await self._send_ping(target)
+
+    def _pick_probe_target(self) -> Optional[str]:
+        # Probe alive *and* suspect peers: a suspect peer is precisely the one we
+        # need to confirm — an ACK refreshes it (avoiding a false eviction), and
+        # persistent silence lets the staleness detector finish the job.
+        candidates = self.peers.all()
+        if not candidates:
+            return None
+        return self.gossip._rng.choice(candidates).node_id
+
+    async def _send_ping(self, target: str) -> None:
+        peer = self.peers.get(target)
+        if peer is None:
+            return
+        self._probe = {"target": target, "sent_at": self._monotonic(), "phase": "direct"}
+        payload = {"subject": target, "ack_to": self.id, "ack_addr": self.address}
+        try:
+            await self._transport.send(peer.address, Message(MessageType.PING, self.id, payload))
+            self.metrics.inc("swim_pings")
+        except Exception:  # noqa: BLE001 - unreachable target ages out
+            pass
+
+    async def _send_ping_reqs(self, target: str) -> None:
+        peer = self.peers.get(target)
+        if peer is None:
+            return
+        helpers = [p for p in self.peers.alive() if p.node_id != target]
+        if not helpers:
+            return
+        k = min(self._indirect_k, len(helpers))
+        for helper in self.gossip._rng.sample(helpers, k):
+            payload = {
+                "subject": target,
+                "subject_addr": peer.address,
+                "ack_to": self.id,
+                "ack_addr": self.address,
+            }
+            try:
+                await self._transport.send(
+                    helper.address, Message(MessageType.PING_REQ, self.id, payload)
+                )
+                self.metrics.inc("swim_ping_reqs")
+            except Exception:  # noqa: BLE001
+                continue
+
+    async def _handle_ping(self, message: Message) -> None:
+        # We are the subject: prove we're alive by ACKing the requester directly.
+        ack_addr = message.payload.get("ack_addr")
+        if not ack_addr:
+            return
+        ack = Message(MessageType.ACK, self.id, {"subject": self.id})
+        try:
+            await self._transport.send(ack_addr, ack)
+        except Exception:  # noqa: BLE001
+            pass
+
+    async def _handle_ping_req(self, message: Message) -> None:
+        # A peer asked us to probe `subject` on its behalf; ping it and tell it
+        # to ACK the original requester directly.
+        subject = message.payload["subject"]
+        subject_addr = message.payload["subject_addr"]
+        payload = {
+            "subject": subject,
+            "ack_to": message.payload["ack_to"],
+            "ack_addr": message.payload["ack_addr"],
+        }
+        try:
+            await self._transport.send(subject_addr, Message(MessageType.PING, self.id, payload))
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _handle_ack(self, message: Message) -> None:
+        subject = message.payload.get("subject")
+        if subject:
+            self.peers.refresh(subject)
+            self.metrics.inc("swim_acks")
+            if self._probe is not None and self._probe["target"] == subject:
+                self._probe = None
 
     def on(self, msg_type: str, handler: AppHandler) -> None:
         """Register an async handler for an application message type."""
