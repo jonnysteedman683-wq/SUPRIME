@@ -18,6 +18,7 @@ to O(N) message copies and self-heals when nodes fail — no global coordination
 
 from __future__ import annotations
 
+import asyncio
 import random
 import uuid
 from typing import Callable, Dict, List, Optional, Set
@@ -185,8 +186,9 @@ class PlumtreeBroadcast:
             for peer, mid in self._lazy_queue:
                 by_peer.setdefault(peer, []).append(mid)
             self._lazy_queue = []
-            for peer, ids in by_peer.items():
-                await self._node.send(peer, PT_IHAVE, {"ids": ids})
+            coros = [self._node.send(peer, PT_IHAVE, {"ids": ids}) for peer, ids in by_peer.items()]
+            if coros:
+                await asyncio.gather(*coros)
 
         # Repair broken tree branches: graft lazy links we heard IHAVE from.
         for mid in list(self._missing):
