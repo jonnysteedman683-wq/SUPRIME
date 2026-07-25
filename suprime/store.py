@@ -148,6 +148,28 @@ class DistributedStore:
             (key, Entry.from_dict(data)) for key, data in digest.items()
         )
 
+    def tombstones(self) -> int:
+        """How many deleted-but-retained entries (tombstones) are held."""
+        return sum(1 for e in self._data.values() if e.deleted)
+
+    def collect_garbage(self, min_age: float) -> int:
+        """Purge tombstones older than ``min_age`` seconds; returns count purged.
+
+        Deletions must linger as tombstones long enough to propagate, or a
+        lagging replica that never saw the delete could re-introduce the key.
+        So ``min_age`` should comfortably exceed the swarm's worst-case
+        propagation + node-downtime window; only then is a tombstone safe to
+        drop. This bounds memory without risking resurrection.
+        """
+        now = self._clock()
+        stale = [
+            k for k, e in self._data.items()
+            if e.deleted and (now - e.version.ts) >= min_age
+        ]
+        for key in stale:
+            del self._data[key]
+        return len(stale)
+
     # -- observation --------------------------------------------------------
 
     def subscribe(self, callback: Callable[[str, Any], None]) -> None:

@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import random
 import time
+from collections import deque
 from typing import Awaitable, Callable, Dict, List, Optional
 
 from .consensus import LeaderView
@@ -56,6 +57,9 @@ class SwarmNode:
         claim_grace_rounds: int = 3,
         gossip_store: bool = True,
         persist_dir: Optional[str] = None,
+        adaptive_gossip: bool = False,
+        max_fanout: int = 8,
+        tombstone_gc_after: Optional[float] = None,
         swim: bool = True,
         probe_timeout: float = 1.5,
         indirect_k: int = 2,
@@ -93,8 +97,13 @@ class SwarmNode:
             fanout=fanout,
             rng=rng or random.Random(),
             include_store=gossip_store,
+            adaptive=adaptive_gossip,
+            max_fanout=max_fanout,
         )
         self._leader_view = LeaderView(self.id)
+        self._last_member_count = 0
+        self._tombstone_gc_after = tombstone_gc_after
+        self._gc_counter = 0
 
         self.metrics = MetricsRegistry()
         self.metrics.gauge_from("peers_alive", lambda: float(len(self.peers.alive())))
@@ -105,7 +114,12 @@ class SwarmNode:
         self._leader_callbacks: List[Callable[[str], None]] = []
         self._running = False
         self._loop_task: Optional[asyncio.Task] = None
+        # De-dup cache as a bounded FIFO: a set for O(1) membership plus a deque
+        # to evict the oldest id, so it never grows without bound and never
+        # wholesale-clears (which would let a just-seen message be reprocessed).
         self._seen_messages: "set[str]" = set()
+        self._seen_order: "deque[str]" = deque()
+        self._seen_cap = 10000
         self._tick_hooks: List[Callable[[], Awaitable[None]]] = []
         self._persist_dir = persist_dir
         self.persistence = None  # set on start() when persist_dir is given
@@ -207,14 +221,30 @@ class SwarmNode:
             await self._bootstrap()
         if self._swim:
             await self._swim_probe()
+        # Membership churn → briefly gossip harder so the swarm reconverges fast.
+        count = len(self.peers)
+        if count != self._last_member_count:
+            self.gossip.boost()
+            self._last_member_count = count
+        # Periodically reap old tombstones so deletes don't leak memory forever.
+        if self._tombstone_gc_after is not None:
+            self._gc_counter += 1
+            if self._gc_counter >= 50:
+                self._gc_counter = 0
+                self.store.collect_garbage(self._tombstone_gc_after)
         self._update_leader()
         # Advance task coordination *before* gossiping so any claim or result
         # written this round is disseminated in the same round's digest, which
         # keeps claim state converging quickly (important for exactly-once).
         await self.tasks.evaluate()
         await self.gossip_once()
+        # Isolate extension services: one failing hook must not abort the tick
+        # or prevent the others from running.
         for hook in self._tick_hooks:
-            await hook()
+            try:
+                await hook()
+            except Exception:  # noqa: BLE001 - extension services are untrusted
+                self.metrics.inc("hook_errors")
 
     def on_tick(self, hook: Callable[[], Awaitable[None]]) -> None:
         """Register an async callback run at the end of every swarm tick.
@@ -246,14 +276,28 @@ class SwarmNode:
 
     # -- messaging ----------------------------------------------------------
 
-    async def _on_message(self, message: Message) -> None:
-        if message.id in self._seen_messages:
-            return
-        self._seen_messages.add(message.id)
-        if len(self._seen_messages) > 10000:
-            self._seen_messages.clear()
+    def _remember(self, message_id: str) -> None:
+        self._seen_messages.add(message_id)
+        self._seen_order.append(message_id)
+        if len(self._seen_order) > self._seen_cap:
+            self._seen_messages.discard(self._seen_order.popleft())
 
+    async def _on_message(self, message: Message) -> None:
+        mid = getattr(message, "id", None)
+        if mid is not None:
+            if mid in self._seen_messages:
+                return
+            self._remember(mid)
         self.metrics.inc("messages_received")
+        # Isolate handling: a malformed or malicious message (missing fields,
+        # bad types) must never crash the node or tear down its transport
+        # connection. It is counted and dropped.
+        try:
+            await self._route(message)
+        except Exception:  # noqa: BLE001 - defensive: never trust the wire
+            self.metrics.inc("bad_messages")
+
+    async def _route(self, message: Message) -> None:
         mtype = message.type
         if mtype == MessageType.GOSSIP:
             self.gossip.apply(message)
@@ -283,8 +327,12 @@ class SwarmNode:
                 pass
 
     async def _dispatch_app(self, message: Message) -> None:
+        # Isolate each handler so one buggy subscriber can't starve the others.
         for handler in self._app_handlers.get(message.type, []):
-            await handler(message)
+            try:
+                await handler(message)
+            except Exception:  # noqa: BLE001 - application handlers are untrusted
+                self.metrics.inc("handler_errors")
 
     # -- SWIM failure detection --------------------------------------------
 

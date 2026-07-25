@@ -18,8 +18,9 @@ substrate.
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .message import Message
 from .store import Entry
@@ -36,11 +37,22 @@ class KVStore:
     Args:
         node: The node to run on.
         namespace: Key prefix isolating this database within the shared store.
+        clock: Injectable wall-clock for TTL expiry (defaults to ``time.time``).
+
+    Beyond simple get/put it offers **TTL expiry** (an absolute expiry timestamp
+    replicates with the key, so every node expires it consistently), **range
+    queries**, and **secondary indexes** (index entries live in the replicated
+    store, so any node can answer an index query).
     """
 
-    def __init__(self, node, namespace: str = "kv/") -> None:
+    def __init__(self, node, namespace: str = "kv/", clock: Callable[[], float] = time.time) -> None:
         self._node = node
-        self._ns = namespace
+        base = namespace.rstrip("/")
+        self._ns = base + "/"           # values
+        self._exp_ns = base + ".exp/"   # absolute expiry timestamps
+        self._idx_ns = base + ".idx/"   # secondary index entries
+        self._clock = clock
+        self._indexes: Dict[str, Callable[[Any], Any]] = {}
         self._pending: Dict[str, Dict[str, Any]] = {}
         node.on(KV_READ_REQ, self._on_read_req)
         node.on(KV_READ_RESP, self._on_read_resp)
@@ -50,35 +62,120 @@ class KVStore:
     def _k(self, key: str) -> str:
         return self._ns + key
 
+    # -- TTL helpers -------------------------------------------------------
+
+    def _expiry(self, key: str) -> Optional[float]:
+        return self._node.store.get(self._exp_ns + key)
+
+    def _is_expired(self, key: str) -> bool:
+        exp = self._expiry(key)
+        return exp is not None and self._clock() >= exp
+
     # -- local (eventually consistent) API ---------------------------------
 
-    def put(self, key: str, value: Any) -> None:
+    def put(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+        """Store ``value`` at ``key``, optionally expiring ``ttl`` seconds later."""
+        self._reindex(key, self._node.store.get(self._k(key)), value)
         self._node.store.set(self._k(key), value)
+        if ttl is not None:
+            self._node.store.set(self._exp_ns + key, self._clock() + ttl)
+        elif self._exp_ns + key in self._node.store:
+            self._node.store.delete(self._exp_ns + key)
 
     def get(self, key: str, default: Any = None) -> Any:
+        if self._is_expired(key):
+            self.delete(key)  # lazy expiry: reap on access so it propagates
+            return default
         return self._node.store.get(self._k(key), default)
 
     def delete(self, key: str) -> None:
+        self._reindex(key, self._node.store.get(self._k(key)), None)
         self._node.store.delete(self._k(key))
+        if self._exp_ns + key in self._node.store:
+            self._node.store.delete(self._exp_ns + key)
+
+    def ttl(self, key: str) -> Optional[float]:
+        """Seconds until ``key`` expires, or ``None`` if it has no expiry."""
+        exp = self._expiry(key)
+        return None if exp is None else max(0.0, exp - self._clock())
 
     def keys(self) -> List[str]:
-        return [k[len(self._ns):] for k in self._node.store.keys() if k.startswith(self._ns)]
+        return [k for k, _ in self.scan()]
 
     def scan(self, prefix: str = "") -> List[Tuple[str, Any]]:
         out = []
         for k, v in self._node.store.items():
-            if k.startswith(self._ns) and k[len(self._ns):].startswith(prefix):
-                out.append((k[len(self._ns):], v))
+            if not k.startswith(self._ns):
+                continue
+            short = k[len(self._ns):]
+            if short.startswith(prefix) and not self._is_expired(short):
+                out.append((short, v))
         return sorted(out)
+
+    def range(self, start: str, end: str) -> List[Tuple[str, Any]]:
+        """Return sorted ``(key, value)`` pairs with ``start <= key < end``."""
+        return [(k, v) for k, v in self.scan() if start <= k < end]
+
+    def sweep_expired(self) -> int:
+        """Proactively delete all expired keys; returns how many were reaped."""
+        expired = [
+            k[len(self._ns):]
+            for k, _ in self._node.store.items()
+            if k.startswith(self._ns) and self._is_expired(k[len(self._ns):])
+        ]
+        for key in expired:
+            self.delete(key)
+        return len(expired)
+
+    # -- secondary indexes -------------------------------------------------
+
+    def create_index(self, name: str, extractor: Callable[[Any], Any]) -> None:
+        """Register a secondary index mapping ``extractor(value)`` → keys.
+
+        Backfills over existing values so the index is immediately complete.
+        """
+        self._indexes[name] = extractor
+        for key, value in self.scan():
+            self._add_index_entry(name, extractor(value), key)
+
+    def query_index(self, name: str, index_key: Any) -> List[str]:
+        """Return the (non-expired) keys whose value indexes to ``index_key``."""
+        prefix = f"{self._idx_ns}{name}/{index_key}/"
+        out = []
+        for k, _ in self._node.store.items():
+            if k.startswith(prefix):
+                rec = k[len(prefix):]
+                if not self._is_expired(rec):
+                    out.append(rec)
+        return sorted(out)
+
+    def _index_key(self, name: str, index_key: Any, record_key: str) -> str:
+        return f"{self._idx_ns}{name}/{index_key}/{record_key}"
+
+    def _add_index_entry(self, name: str, index_key: Any, record_key: str) -> None:
+        self._node.store.set(self._index_key(name, index_key, record_key), True)
+
+    def _reindex(self, key: str, old_value: Any, new_value: Any) -> None:
+        for name, extractor in self._indexes.items():
+            if old_value is not None:
+                self._node.store.delete(self._index_key(name, extractor(old_value), key))
+            if new_value is not None:
+                self._add_index_entry(name, extractor(new_value), key)
 
     # -- quorum API --------------------------------------------------------
 
-    async def quorum_put(self, key: str, value: Any, w: int = 2, timeout: float = 1.0) -> int:
+    async def quorum_put(
+        self, key: str, value: Any, w: int = 2, timeout: float = 1.0, ttl: Optional[float] = None
+    ) -> int:
         """Write locally and to peers, waiting for ``w`` total acks (incl. self).
 
-        Returns the number of replicas that durably acknowledged the write.
+        Returns the number of replicas that durably acknowledged the write. An
+        optional ``ttl`` sets an expiry that replicates with the key.
         """
+        self._reindex(key, self._node.store.get(self._k(key)), value)
         entry = self._node.store.set(self._k(key), value)
+        if ttl is not None:
+            self._node.store.set(self._exp_ns + key, self._clock() + ttl)
         acks = 1  # our own write
         peers = [p.node_id for p in self._node.peers.alive()]
         need = max(0, w - 1)

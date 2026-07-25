@@ -18,6 +18,9 @@ From that single channel, higher-level behaviour *emerges*:
   live membership, with automatic failover when it dies.
 - 🔌 **Pluggable transport** — real TCP for deployment, an in-memory transport
   for running an entire swarm (and its tests) inside one process.
+- 📈 **Adaptive gossip** (opt-in) — per-round fanout scales as ~log₂(N) with the
+  swarm size so dissemination stays logarithmic as it grows, with a temporary
+  boost right after membership churn (`SwarmNode(adaptive_gossip=True)`).
 - 🧪 **An experimental toolkit** — a chaos/partition harness, push-sum
   aggregation, stigmergic load balancing, a self-healing Plumtree/HyParView
   overlay, and a live terminal dashboard (see [Experimental features](#experimental-features)).
@@ -352,6 +355,16 @@ pm.attach()    # durably record all future writes
 received, live peers, store size) with a Prometheus exporter; `StructuredLogger`
 emits JSON log records.
 
+### Robustness
+
+A node is defensive against bad input and buggy extensions: a malformed or
+malicious message can't crash it or drop its connection (it's counted as
+`bad_messages` and ignored), and a throwing app handler or tick hook is isolated
+(`handler_errors` / `hook_errors`) so it never starves the others. Memory is
+bounded too — the de-dup and Plumtree caches are FIFO-capped, and deleted-key
+tombstones can be reaped with `store.collect_garbage(min_age)` or automatically
+via `SwarmNode(tombstone_gc_after=…)`.
+
 ### Distributed KV database
 
 `KVStore` turns the swarm into a Dynamo-style database with **tunable
@@ -364,6 +377,18 @@ from suprime import KVStore
 db = KVStore(node)
 await db.quorum_put("user:1", {"name": "ada"}, w=3)
 value = await db.quorum_get("user:1", r=1)   # W+R > N ⇒ sees the write
+```
+
+It also offers **TTL expiry** (an absolute expiry replicates with the key, so
+every node expires it consistently — lazily on access and via `sweep_expired()`),
+**range queries** (`db.range("a", "m")`), and **secondary indexes** whose entries
+live in the replicated store, so any node can answer an index query:
+
+```python
+db.put("session:1", token, ttl=30)           # expires in 30s, everywhere
+db.create_index("by_city", lambda v: v["city"])
+db.put("u1", {"name": "ada", "city": "london"})
+db.query_index("by_city", "london")          # -> ["u1"]
 ```
 
 ### Deterministic simulation testing
