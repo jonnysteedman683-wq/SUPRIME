@@ -140,3 +140,19 @@ def test_leader_view_reports_transitions():
     assert lv.is_leader() is False
     assert lv.update([]) == "m"  # a left -> leadership returns
     assert lv.is_leader() is True
+
+def test_peer_table_evict():
+    pt = PeerTable("self")
+    pt.merge("p1", "addr1", 1)
+
+    # Peer should exist
+    assert pt.get("p1") is not None
+    assert "p1" in pt
+
+    # Evict peer
+    pt.evict("p1")
+    assert pt.get("p1") is None
+    assert "p1" not in pt
+
+    # Evicting an unknown peer should not raise errors
+    pt.evict("p2")
