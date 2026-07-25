@@ -23,7 +23,7 @@ AE_PUSH = "__ae_push__"
 
 
 def _bucket_of(key: str, n_buckets: int) -> int:
-    h = hashlib.sha1(key.encode("utf-8")).digest()
+    h = hashlib.sha256(key.encode("utf-8")).digest()
     return int.from_bytes(h[:4], "big") % n_buckets
 
 
@@ -39,7 +39,7 @@ def bucket_hashes(digest: Dict[str, Dict[str, Any]], n_buckets: int) -> Dict[int
     out: Dict[int, str] = {}
     for b, items in buckets.items():
         joined = "\n".join(sorted(items)).encode("utf-8")
-        out[b] = hashlib.sha1(joined).hexdigest()
+        out[b] = hashlib.sha256(joined).hexdigest()
     return out
 
 
