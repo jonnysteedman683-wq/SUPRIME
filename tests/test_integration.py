@@ -80,3 +80,25 @@ async def test_crdt_replicator_goes_quiet_when_converged(cluster: Cluster):
     after = sum(r.syncs_sent for r in reps)
     # no CRDT changed, so no CRDT-sync messages should have been sent at all
     assert after == before
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_ignores_dead_seeds():
+    reg: dict = {}
+    node = SwarmNode(transport=InMemoryTransport("a", registry=reg), node_id="a", seeds=["dead_seed", "alive_seed"])
+
+    # Mock the transport send method to raise an exception for the dead seed
+    original_send = node._transport.send
+    async def mock_send(address, message):
+        if address == "dead_seed":
+            raise Exception("Simulated connection error")
+        return await original_send(address, message)
+
+    node._transport.send = mock_send
+
+    # Verify that start (which calls _bootstrap) completes without raising the Exception
+    await node.start(auto=False)
+
+    # The node should be running
+    assert node._running is True
+    await node.stop()
