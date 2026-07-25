@@ -281,7 +281,15 @@ class MVRegister:
                     break
             if dominated:
                 continue
-            if not any(vc.compare(k_vc) == "equal" and val == k_val for k_val, k_vc in kept):
+
+            found = False
+            for k_val, k_vc in kept:
+                # Check value equality first before expensive VectorClock comparison
+                if val == k_val and vc.compare(k_vc) == "equal":
+                    found = True
+                    break
+
+            if not found:
                 kept.append((val, vc))
         changed = {id(v) for v in kept} != {id(v) for v in self._versions}
         self._versions = kept
