@@ -355,6 +355,16 @@ pm.attach()    # durably record all future writes
 received, live peers, store size) with a Prometheus exporter; `StructuredLogger`
 emits JSON log records.
 
+### Robustness
+
+A node is defensive against bad input and buggy extensions: a malformed or
+malicious message can't crash it or drop its connection (it's counted as
+`bad_messages` and ignored), and a throwing app handler or tick hook is isolated
+(`handler_errors` / `hook_errors`) so it never starves the others. Memory is
+bounded too — the de-dup and Plumtree caches are FIFO-capped, and deleted-key
+tombstones can be reaped with `store.collect_garbage(min_age)` or automatically
+via `SwarmNode(tombstone_gc_after=…)`.
+
 ### Distributed KV database
 
 `KVStore` turns the swarm into a Dynamo-style database with **tunable

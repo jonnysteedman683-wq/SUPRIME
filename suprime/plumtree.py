@@ -53,12 +53,16 @@ class PlumtreeBroadcast:
         on_deliver: Optional[DeliverCallback] = None,
         graft_timeout_rounds: int = 2,
         rng: Optional[random.Random] = None,
+        cache_cap: int = 50000,
     ) -> None:
         self._node = node
         self._neighbors = neighbors or (lambda: [p.node_id for p in node.peers.all()])
         self._on_deliver = on_deliver
         self._graft_timeout = graft_timeout_rounds
         self._rng = rng or random.Random()
+        # Cap the delivered-message cache (FIFO): without a bound it grows once
+        # per broadcast forever. Cap must exceed any plausible in-flight window.
+        self._cache_cap = cache_cap
 
         self.eager: Set[str] = set()
         self.lazy: Set[str] = set()
@@ -82,11 +86,18 @@ class PlumtreeBroadcast:
 
     # -- broadcasting -------------------------------------------------------
 
+    def _record(self, msg_id: str, payload: dict) -> None:
+        self._received[msg_id] = payload
+        if len(self._received) > self._cache_cap:
+            # Evict the oldest delivered id (dicts preserve insertion order).
+            oldest = next(iter(self._received))
+            self._received.pop(oldest, None)
+
     async def broadcast(self, payload: dict) -> str:
         """Broadcast ``payload`` to the whole swarm; returns the message id."""
         self._sync_neighbors()
         msg_id = uuid.uuid4().hex
-        self._received[msg_id] = payload
+        self._record(msg_id, payload)
         self._deliver(msg_id, payload)
         await self._eager_push(msg_id, payload, sender=None)
         self._lazy_push(msg_id, sender=None)
@@ -128,7 +139,7 @@ class PlumtreeBroadcast:
         payload = message.payload["payload"]
         src = message.src
         if mid not in self._received:
-            self._received[mid] = payload
+            self._record(mid, payload)
             self._missing.pop(mid, None)
             self._ihave_from.pop(mid, None)
             self.eager.add(src)
