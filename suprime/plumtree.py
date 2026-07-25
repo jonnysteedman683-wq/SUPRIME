@@ -18,6 +18,7 @@ to O(N) message copies and self-heals when nodes fail — no global coordination
 
 from __future__ import annotations
 
+import asyncio
 import random
 import uuid
 from typing import Callable, Dict, List, Optional, Set
@@ -121,10 +122,13 @@ class PlumtreeBroadcast:
     # -- push helpers -------------------------------------------------------
 
     async def _eager_push(self, msg_id: str, payload: dict, sender: Optional[str]) -> None:
+        tasks = []
         for peer in list(self.eager):
             if peer == sender:
                 continue
-            await self._node.send(peer, PT_GOSSIP, {"mid": msg_id, "payload": payload})
+            tasks.append(self._node.send(peer, PT_GOSSIP, {"mid": msg_id, "payload": payload}))
+        if tasks:
+            await asyncio.gather(*tasks)
 
     def _lazy_push(self, msg_id: str, sender: Optional[str]) -> None:
         for peer in list(self.lazy):
