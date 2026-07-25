@@ -85,9 +85,7 @@ class PushSumAggregator:
         for key, masses in list(self._inbox.items()):
             if not masses:
                 continue
-            total = _Mass(0.0, 0.0)
-            for m in masses:
-                total.add(m)
+            total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))
             self._inbox[key] = []
             if total.w > 0:
                 self._estimate[key] = total.s / total.w
@@ -100,9 +98,7 @@ class PushSumAggregator:
                 # No peers: keep all mass so nothing is lost.
                 self._inbox[key].append(send)
                 continue
-            await self._node.send(
-                target, AGG_MSG, {"key": key, "s": send.s, "w": send.w}
-            )
+            await self._node.send(target, AGG_MSG, {"key": key, "s": send.s, "w": send.w})
 
     async def _on_message(self, message: Message) -> None:
         key = message.payload["key"]
