@@ -140,3 +140,13 @@ def test_leader_view_reports_transitions():
     assert lv.is_leader() is False
     assert lv.update([]) == "m"  # a left -> leadership returns
     assert lv.is_leader() is True
+
+def test_store_subscribe_notifies_multiple_subscribers():
+    s = DistributedStore("n1")
+    seen1 = []
+    seen2 = []
+    s.subscribe(lambda k, v: seen1.append((k, v)))
+    s.subscribe(lambda k, v: seen2.append((k, v)))
+    s.set("k", 42)
+    assert ("k", 42) in seen1
+    assert ("k", 42) in seen2
