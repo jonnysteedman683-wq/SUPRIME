@@ -15,6 +15,7 @@ key/value data and task coordination all ride the same channel.
 
 from __future__ import annotations
 
+import math
 import random
 from typing import Any, Callable, Dict, List, Union
 
@@ -46,6 +47,8 @@ class GossipService:
         fanout: int = 3,
         rng: random.Random | None = None,
         include_store: bool = True,
+        adaptive: bool = False,
+        max_fanout: int = 8,
     ) -> None:
         self._self_id = self_id
         self._address_provider: Callable[[], str] = (
@@ -59,6 +62,27 @@ class GossipService:
         # When False, gossip carries only membership; state replication is left
         # to a dedicated layer (e.g. Merkle anti-entropy).
         self._include_store = include_store
+        # Adaptive fanout: scale the per-round fanout with swarm size so
+        # dissemination still finishes in ~O(log N) rounds as N grows, with a
+        # temporary boost to max_fanout right after membership churn.
+        self._adaptive = adaptive
+        self._max_fanout = max_fanout
+        self._boost = 0
+
+    def boost(self, rounds: int = 3) -> None:
+        """Temporarily gossip at max fanout for the next ``rounds`` (churn)."""
+        self._boost = max(self._boost, rounds)
+
+    def effective_fanout(self) -> int:
+        """The fanout to use this round given swarm size and any churn boost."""
+        if not self._adaptive:
+            return self._fanout
+        n = len(self._peers)
+        # ~log2(N) neighbours per round keeps convergence logarithmic in N.
+        base = max(self._fanout, math.ceil(math.log2(n + 2)))
+        if self._boost > 0:
+            base = self._max_fanout
+        return min(self._max_fanout, base)
 
     @property
     def heartbeat(self) -> int:
@@ -69,11 +93,14 @@ class GossipService:
         return self._heartbeat
 
     def select_targets(self) -> List[str]:
-        """Choose up to ``fanout`` random peer addresses to gossip to."""
+        """Choose up to the effective fanout of random peer addresses."""
         addresses = self._peers.addresses()
-        if len(addresses) <= self._fanout:
+        fanout = self.effective_fanout()
+        if self._boost > 0:
+            self._boost -= 1
+        if len(addresses) <= fanout:
             return addresses
-        return self._rng.sample(addresses, self._fanout)
+        return self._rng.sample(addresses, fanout)
 
     def build_digest(self) -> Dict[str, Any]:
         """Assemble the payload pushed to peers this round."""

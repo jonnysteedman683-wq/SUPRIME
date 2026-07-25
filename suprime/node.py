@@ -56,6 +56,8 @@ class SwarmNode:
         claim_grace_rounds: int = 3,
         gossip_store: bool = True,
         persist_dir: Optional[str] = None,
+        adaptive_gossip: bool = False,
+        max_fanout: int = 8,
         swim: bool = True,
         probe_timeout: float = 1.5,
         indirect_k: int = 2,
@@ -93,8 +95,11 @@ class SwarmNode:
             fanout=fanout,
             rng=rng or random.Random(),
             include_store=gossip_store,
+            adaptive=adaptive_gossip,
+            max_fanout=max_fanout,
         )
         self._leader_view = LeaderView(self.id)
+        self._last_member_count = 0
 
         self.metrics = MetricsRegistry()
         self.metrics.gauge_from("peers_alive", lambda: float(len(self.peers.alive())))
@@ -207,6 +212,11 @@ class SwarmNode:
             await self._bootstrap()
         if self._swim:
             await self._swim_probe()
+        # Membership churn → briefly gossip harder so the swarm reconverges fast.
+        count = len(self.peers)
+        if count != self._last_member_count:
+            self.gossip.boost()
+            self._last_member_count = count
         self._update_leader()
         # Advance task coordination *before* gossiping so any claim or result
         # written this round is disseminated in the same round's digest, which

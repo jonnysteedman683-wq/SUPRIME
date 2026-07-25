@@ -18,6 +18,9 @@ From that single channel, higher-level behaviour *emerges*:
   live membership, with automatic failover when it dies.
 - 🔌 **Pluggable transport** — real TCP for deployment, an in-memory transport
   for running an entire swarm (and its tests) inside one process.
+- 📈 **Adaptive gossip** (opt-in) — per-round fanout scales as ~log₂(N) with the
+  swarm size so dissemination stays logarithmic as it grows, with a temporary
+  boost right after membership churn (`SwarmNode(adaptive_gossip=True)`).
 - 🧪 **An experimental toolkit** — a chaos/partition harness, push-sum
   aggregation, stigmergic load balancing, a self-healing Plumtree/HyParView
   overlay, and a live terminal dashboard (see [Experimental features](#experimental-features)).
