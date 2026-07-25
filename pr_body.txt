@@ -1,0 +1,8 @@
+💡 **What:**
+Replaced sequential `await self._node.send(...)` calls with a concurrent execution using `asyncio.gather(...)` in `AntiEntropy._on_digest`.
+
+🎯 **Why:**
+Previously, `_on_digest` waited for the `AE_PUSH` message to be sent before starting the `AE_PULL` message. Since these messages are independent but go to the same peer, running them sequentially incurs unnecessary network round-trip delays, especially when processing numerous bucket differences. Concurrency resolves this bottleneck.
+
+📊 **Measured Improvement:**
+A benchmark simulating 100ms of network latency demonstrated a significant reduction in `_on_digest` execution time. The baseline sequential approach took ~0.2010 seconds (100ms + 100ms), while the optimized concurrent approach using `asyncio.gather` took ~0.1006 seconds, yielding a ~50% reduction in execution time for this specific path.

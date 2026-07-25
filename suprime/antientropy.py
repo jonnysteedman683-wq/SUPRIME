@@ -12,6 +12,7 @@ entries instead of the whole dataset, which is what lets the store scale.
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import Any, Dict, List, Set
 
@@ -103,8 +104,10 @@ class AntiEntropy:
         # Push our entries for the differing buckets, and ask the peer for theirs.
         entries = entries_for_buckets(self._store.digest(), mismatched, self._n)
         self.entries_sent += len(entries)
-        await self._node.send(message.src, AE_PUSH, {"entries": entries})
-        await self._node.send(message.src, AE_PULL, {"buckets": list(mismatched)})
+        await asyncio.gather(
+            self._node.send(message.src, AE_PUSH, {"entries": entries}),
+            self._node.send(message.src, AE_PULL, {"buckets": list(mismatched)})
+        )
 
     async def _on_pull(self, message: Message) -> None:
         buckets = set(message.payload["buckets"])
