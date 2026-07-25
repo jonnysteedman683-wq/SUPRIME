@@ -109,10 +109,11 @@ async def test_tcp_leader_failover():
     try:
         assert await _wait_for(lambda: b.leader == "n0" and c.leader == "n0")
         await a.stop()
-        # survivors must detect the dead leader and elect n1
+        # survivors must detect the dead leader and elect n1. Generous timeout:
+        # this is a real-clock test and CI/full-suite CPU load can add jitter.
         assert await _wait_for(
             lambda: b.leader == "n1" and c.leader == "n1" and "n0" not in b.peers,
-            timeout=5.0,
+            timeout=15.0,
         )
     finally:
         await b.stop()

@@ -7,7 +7,9 @@ Every node runs the same code and speaks the same epidemic gossip protocol.
 From that single channel, higher-level behaviour *emerges*:
 
 - 🕸️ **Self-organising membership** — nodes discover each other from a seed and
-  keep a live view of the swarm using heartbeat-based failure detection.
+  keep a live view of the swarm using heartbeat gossip plus **SWIM-style active
+  probing** (direct + indirect `PING`/`PING-REQ`) that confirms liveness before
+  eviction, so slow-but-alive peers aren't falsely dropped.
 - 🔁 **Replicated shared state** — a last-writer-wins CRDT key/value store that
   converges on every node regardless of message order, loss or duplication.
 - 🐝 **Emergent distributed tasks** — any node can submit work; the swarm
@@ -407,8 +409,9 @@ Lint runs in CI via `ruff` (pyflakes + syntax rules) alongside the test matrix.
 The suite runs whole swarms deterministically over the in-memory transport
 (driving gossip rounds by hand against a manual clock) and also verifies the
 real TCP transport end to end. Coverage spans discovery, replication, distributed
-tasks, leader failover, chaos partition/heal, push-sum, stigmergy, the
-Plumtree/HyParView overlay, CRDT convergence (incl. Hypothesis property tests of
+tasks, leader failover, SWIM probing (silent-but-alive peers survive, dead peers
+are still evicted, indirect escalation), chaos partition/heal, push-sum,
+stigmergy, the Plumtree/HyParView overlay, CRDT convergence (incl. Hypothesis property tests of
 the merge laws), RGA collaborative text, Ed25519/ChaCha20 transports, proof of
 work, Byzantine agreement, Merkle anti-entropy, federated learning, pub/sub, the
 KV database (quorum + read-repair), persistence/crash-recovery, metrics, and the

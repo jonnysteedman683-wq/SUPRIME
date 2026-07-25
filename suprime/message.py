@@ -22,6 +22,7 @@ class MessageType:
     WELCOME = "welcome"
     GOSSIP = "gossip"
     PING = "ping"
+    PING_REQ = "ping_req"  # SWIM indirect probe request
     ACK = "ack"
 
     # Application level
