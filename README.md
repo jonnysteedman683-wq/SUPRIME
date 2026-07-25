@@ -366,6 +366,18 @@ await db.quorum_put("user:1", {"name": "ada"}, w=3)
 value = await db.quorum_get("user:1", r=1)   # W+R > N ⇒ sees the write
 ```
 
+It also offers **TTL expiry** (an absolute expiry replicates with the key, so
+every node expires it consistently — lazily on access and via `sweep_expired()`),
+**range queries** (`db.range("a", "m")`), and **secondary indexes** whose entries
+live in the replicated store, so any node can answer an index query:
+
+```python
+db.put("session:1", token, ttl=30)           # expires in 30s, everywhere
+db.create_index("by_city", lambda v: v["city"])
+db.put("u1", {"name": "ada", "city": "london"})
+db.query_index("by_city", "london")          # -> ["u1"]
+```
+
 ### Deterministic simulation testing
 
 `simulation.py` runs the whole swarm on a single seeded schedule of drops,
