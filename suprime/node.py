@@ -55,6 +55,7 @@ class SwarmNode:
         dead_after: float = 6.0,
         claim_grace_rounds: int = 3,
         gossip_store: bool = True,
+        persist_dir: Optional[str] = None,
         rng: Optional[random.Random] = None,
         clock: Callable[[], float] = time.time,
         monotonic: Callable[[], float] = time.monotonic,
@@ -97,6 +98,8 @@ class SwarmNode:
         self._loop_task: Optional[asyncio.Task] = None
         self._seen_messages: "set[str]" = set()
         self._tick_hooks: List[Callable[[], Awaitable[None]]] = []
+        self._persist_dir = persist_dir
+        self.persistence = None  # set on start() when persist_dir is given
 
     # -- properties ---------------------------------------------------------
 
@@ -121,6 +124,12 @@ class SwarmNode:
             auto: When ``True`` a background task drives periodic gossip rounds.
                 Tests typically pass ``False`` and call :meth:`tick` manually.
         """
+        if self._persist_dir is not None and self.persistence is None:
+            from .persistence import PersistenceManager
+
+            self.persistence = PersistenceManager(self.store, self._persist_dir)
+            self.persistence.recover()   # restore any prior state from disk
+            self.persistence.attach()    # durably log all future commits
         await self._transport.start(self._on_message)
         self._running = True
         self._leader_view.update(self.peers.known_ids())
@@ -140,6 +149,9 @@ class SwarmNode:
                 pass
             self._loop_task = None
         await self._transport.stop()
+        if self.persistence is not None:
+            self.persistence.snapshot()  # flush a final durable snapshot
+            self.persistence.close()
 
     async def __aenter__(self) -> "SwarmNode":
         return await self.start()

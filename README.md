@@ -372,11 +372,37 @@ asserts convergence, exactly-once execution and no lost writes across many seeds
 a failure reproduces from its seed. (This harness already caught and drove a real
 fix — bootstrap-JOIN retry for nodes whose initial join was dropped.)
 
+## Deployment
+
+Every knob is an environment variable (`SUPRIME_*`, see `suprime/config.py`), so
+a node runs the same locally, in Docker, or in a cluster:
+
+```bash
+# run a node straight from the environment
+SUPRIME_PORT=7000 SUPRIME_PERSIST_DIR=./data python -m suprime serve
+SUPRIME_PORT=7001 SUPRIME_SEEDS=127.0.0.1:7000 python -m suprime serve
+```
+
+A `Dockerfile` and `docker-compose.yml` bring up a 3-node swarm (a persistent
+seed plus two joiners) with one command:
+
+```bash
+docker compose up
+```
+
+Set `SUPRIME_CLUSTER_KEY` (64 hex chars = 32 bytes) to encrypt all traffic, and
+`SUPRIME_PERSIST_DIR` to make a node's state durable across restarts. The TCP
+transport auto-reconnects, gzip-compresses large frames, and guards against
+oversized frames; the Ed25519 layer transparently uses the `cryptography`
+library when the `crypto` extra is installed, falling back to pure Python.
+
 ## Tests
 
 ```bash
 pytest -q
 ```
+
+Lint runs in CI via `ruff` (pyflakes + syntax rules) alongside the test matrix.
 
 The suite runs whole swarms deterministically over the in-memory transport
 (driving gossip rounds by hand against a manual clock) and also verifies the

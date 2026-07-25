@@ -131,7 +131,35 @@ def build_parser() -> argparse.ArgumentParser:
         help="run scale/performance benchmarks and write an HTML chart report",
     )
     bench.add_argument("--out", default="bench_report.html", help="report output path")
+
+    sub.add_parser(
+        "serve",
+        help="run a node configured entirely from SUPRIME_* environment variables",
+    )
     return parser
+
+
+async def _serve() -> None:
+    from .config import NodeConfig, build_node
+
+    config = NodeConfig.from_env()
+    node = build_node(config)
+    await node.start()
+    print(f"[{node.id}] serving on {node.address} seeds={config.seeds}")
+
+    stop_event = asyncio.Event()
+
+    def _request_stop(*_) -> None:
+        stop_event.set()
+
+    loop = asyncio.get_event_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, _request_stop)
+        except NotImplementedError:  # pragma: no cover - Windows
+            pass
+    await stop_event.wait()
+    await node.stop()
 
 
 def main(argv: List[str] | None = None) -> None:
@@ -153,6 +181,11 @@ def main(argv: List[str] | None = None) -> None:
         from .bench import main as bench_main
 
         bench_main(args.out)
+    elif args.command == "serve":
+        try:
+            asyncio.run(_serve())
+        except KeyboardInterrupt:  # pragma: no cover
+            pass
 
 
 if __name__ == "__main__":  # pragma: no cover

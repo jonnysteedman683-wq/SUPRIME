@@ -17,7 +17,7 @@ from suprime.aggregate import PushSumAggregator
 from suprime.chaos import ChaosController, ChaosTransport
 from suprime.node import SwarmNode
 from suprime.plumtree import PlumtreeBroadcast
-from suprime.transport import InMemoryTransport, TransportError
+from suprime.transport import InMemoryTransport
 
 
 # -- chaos harness ---------------------------------------------------------

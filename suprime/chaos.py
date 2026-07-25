@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Set
 
 from .message import Message
 from .transport import Transport, TransportError

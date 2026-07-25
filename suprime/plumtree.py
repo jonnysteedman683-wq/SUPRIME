@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import random
 import uuid
-from typing import Awaitable, Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 from .message import Message
 

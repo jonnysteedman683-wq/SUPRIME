@@ -48,6 +48,7 @@ from .security import (
     SecureTransport,
     SignedTransport,
     mint_identity,
+    secure_transport,
     verify_identity,
 )
 from .node import SwarmNode
@@ -109,6 +110,7 @@ __all__ = [
     "LinearModel",
     "SignedTransport",
     "EncryptedTransport",
+    "secure_transport",
     "KVStore",
     "PersistenceManager",
     "MetricsRegistry",

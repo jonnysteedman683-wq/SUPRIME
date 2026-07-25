@@ -23,13 +23,12 @@ import hashlib
 import hmac
 import itertools
 import os
-import time
 from dataclasses import dataclass
 from typing import Optional
 
 from . import crypto
 from .message import Message
-from .transport import Transport, TransportError
+from .transport import Transport
 
 
 # -- HMAC-authenticated transport ------------------------------------------
@@ -219,6 +218,28 @@ class EncryptedTransport(Transport):
 
     async def stop(self) -> None:
         await self._inner.stop()
+
+
+def secure_transport(
+    inner: Transport,
+    *,
+    sk: Optional[bytes] = None,
+    pk: Optional[bytes] = None,
+    cluster_key: Optional[bytes] = None,
+) -> Transport:
+    """Compose a hardened transport stack over ``inner``.
+
+    With both a keypair and a cluster key you get **sign-then-encrypt**: messages
+    are Ed25519-signed then ChaCha20-encrypted, so the wire is opaque *and* every
+    message is provably from the claimed node. Pass only one for just
+    authentication or just confidentiality.
+    """
+    t = inner
+    if cluster_key is not None:
+        t = EncryptedTransport(t, cluster_key)
+    if sk is not None and pk is not None:
+        t = SignedTransport(t, sk, pk)
+    return t
 
 
 # -- hashcash-style proof of work ------------------------------------------

@@ -34,3 +34,11 @@ include = ["suprime*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+# Real-bug rules: pyflakes (F) + a pragmatic slice of pycodestyle errors (E).
+select = ["F", "E9"]

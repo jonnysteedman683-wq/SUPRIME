@@ -83,7 +83,7 @@ def _bit(h: bytes, i: int) -> int:
     return (h[i // 8] >> (i % 8)) & 1
 
 
-def publickey(sk: bytes) -> bytes:
+def _pure_publickey(sk: bytes) -> bytes:
     """Derive a 32-byte Ed25519 public key from a 32-byte secret seed."""
     h = _H(sk)
     a = 2 ** (_b - 2) + sum(2 ** i * _bit(h, i) for i in range(3, _b - 2))
@@ -96,7 +96,7 @@ def _Hint(m: bytes) -> int:
     return sum(2 ** i * _bit(h, i) for i in range(2 * _b))
 
 
-def sign(sk: bytes, pk: bytes, message: bytes) -> bytes:
+def _pure_sign(sk: bytes, pk: bytes, message: bytes) -> bytes:
     """Produce a 64-byte Ed25519 signature over ``message``."""
     h = _H(sk)
     a = 2 ** (_b - 2) + sum(2 ** i * _bit(h, i) for i in range(3, _b - 2))
@@ -126,7 +126,7 @@ def _isoncurve(P: Tuple[int, int]) -> bool:
     return (-x * x + y * y - 1 - _d * x * x * y * y) % _q == 0
 
 
-def verify(pk: bytes, message: bytes, signature: bytes) -> bool:
+def _pure_verify(pk: bytes, message: bytes, signature: bytes) -> bool:
     """Verify a 64-byte Ed25519 signature; returns ``True`` iff valid."""
     if len(signature) != _b // 4 or len(pk) != _b // 8:
         return False
@@ -140,6 +140,68 @@ def verify(pk: bytes, message: bytes, signature: bytes) -> bool:
     left = _scalarmult(_B, S)
     right = _edwards(R, _scalarmult(A, h))
     return left == right
+
+
+import contextlib
+
+
+@contextlib.contextmanager
+def _silence_fd(fd: int):
+    """Temporarily silence a raw file descriptor (e.g. a native panic's stderr)."""
+    saved = os.dup(fd)
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, fd)
+    os.close(devnull)
+    try:
+        yield
+    finally:
+        os.dup2(saved, fd)
+        os.close(saved)
+
+
+def _load_fast_backend():
+    """Bind Ed25519 to ``cryptography`` if it is present and functional.
+
+    Ed25519 is deterministic per RFC 8032, so keys and signatures are
+    byte-identical across backends — a node on either backend interoperates
+    with one on the other. A broken native install can *panic* (writing to the
+    raw stderr fd) rather than raising, so we silence fd 2 and probe the backend
+    once before trusting it; any failure falls through to the pure-Python path.
+    """
+    with _silence_fd(2):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import (
+            Ed25519PrivateKey,
+            Ed25519PublicKey,
+        )
+
+        def _pk(sk: bytes) -> bytes:
+            return Ed25519PrivateKey.from_private_bytes(sk).public_key().public_bytes_raw()
+
+        def _sign(sk: bytes, pk: bytes, message: bytes) -> bytes:
+            return Ed25519PrivateKey.from_private_bytes(sk).sign(message)
+
+        def _verify(pk: bytes, message: bytes, signature: bytes) -> bool:
+            try:
+                Ed25519PublicKey.from_public_bytes(pk).verify(signature, message)
+                return True
+            except Exception:
+                return False
+
+        t = b"\x00" * 32
+        assert _verify(_pk(t), b"x", _sign(t, b"", b"x"))
+        return _pk, _sign, _verify
+
+
+try:  # pragma: no cover - path depends on optional dependency health
+    publickey, sign, verify = _load_fast_backend()
+    BACKEND = "cryptography"
+except (KeyboardInterrupt, SystemExit):  # pragma: no cover
+    raise
+except BaseException:  # noqa: BLE001 - any failure (incl. native panics) → fallback
+    publickey = _pure_publickey
+    sign = _pure_sign
+    verify = _pure_verify
+    BACKEND = "pure-python"
 
 
 def generate_keypair() -> Tuple[bytes, bytes]:

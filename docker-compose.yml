@@ -1,0 +1,36 @@
+# A local 3-node SUPRIME swarm. `docker compose up` starts a seed and two
+# nodes that bootstrap from it; they discover each other and replicate state
+# over gossip. Scale with `docker compose up --scale node=5` after adding more
+# node services, or point extra nodes at seed:7000.
+services:
+  seed:
+    build: .
+    environment:
+      SUPRIME_ID: seed
+      SUPRIME_HOST: 0.0.0.0
+      SUPRIME_PORT: "7000"
+      SUPRIME_GOSSIP_INTERVAL: "0.5"
+      SUPRIME_PERSIST_DIR: /data
+    volumes:
+      - seed_data:/data
+    ports:
+      - "7000:7000"
+
+  node1:
+    build: .
+    depends_on: [seed]
+    environment:
+      SUPRIME_ID: node1
+      SUPRIME_PORT: "7000"
+      SUPRIME_SEEDS: seed:7000
+
+  node2:
+    build: .
+    depends_on: [seed]
+    environment:
+      SUPRIME_ID: node2
+      SUPRIME_PORT: "7000"
+      SUPRIME_SEEDS: seed:7000
+
+volumes:
+  seed_data:

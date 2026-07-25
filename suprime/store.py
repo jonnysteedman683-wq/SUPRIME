@@ -68,17 +68,15 @@ class DistributedStore:
         self._data: Dict[str, Entry] = {}
         self._subscribers: List[Callable[[str, Any], None]] = []
         self._commit_subs: List[Callable[[str, Entry], None]] = []
+        self._highest_ts: float = 0.0
 
     def _next_version(self) -> Version:
         # Ensure monotonicity even if the wall clock does not advance between
         # rapid writes by nudging past the highest version we've produced.
         ts = self._clock()
-        highest = max(
-            (e.version.ts for e in self._data.values() if e.version.origin == self._node_id),
-            default=0.0,
-        )
-        if ts <= highest:
-            ts = highest + 1e-6
+        if ts <= self._highest_ts:
+            ts = self._highest_ts + 1e-6
+        self._highest_ts = ts
         return Version(ts=ts, origin=self._node_id)
 
     def set(self, key: str, value: Any) -> Entry:
@@ -126,6 +124,8 @@ class DistributedStore:
         current = self._data.get(key)
         if current is None or entry.version > current.version:
             self._data[key] = entry
+            if entry.version.origin == self._node_id and entry.version.ts > self._highest_ts:
+                self._highest_ts = entry.version.ts
             if not entry.deleted:
                 self._notify(key, entry.value)
             self._emit_commit(key, entry)

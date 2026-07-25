@@ -14,25 +14,13 @@ import copy
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from suprime.crdt import GCounter, LWWMap, ORSet, PNCounter
+from suprime.crdt import GCounter, ORSet, PNCounter
 from suprime.rga import RGA
 
 
 # Strategies for building up CRDT replicas from random operations.
 _node_ids = st.sampled_from(["a", "b", "c", "d"])
 _ops = st.lists(st.tuples(_node_ids, st.integers(min_value=1, max_value=5)), max_size=25)
-
-
-def _build_pncounter(ops, incdec):
-    c = PNCounter("seed")
-    replicas = {}
-    for node, amt in ops:
-        r = replicas.setdefault(node, PNCounter(node))
-        if incdec:
-            r.increment(amt)
-        else:
-            r.decrement(amt)
-    return list(replicas.values())
 
 
 @settings(max_examples=200, deadline=None)
