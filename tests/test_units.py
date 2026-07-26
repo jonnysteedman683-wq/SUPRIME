@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pytest
 import itertools
+from suprime.aggregate import _Mass
 
 
 from suprime.consensus import LeaderView, elect_leader
@@ -12,6 +13,17 @@ from suprime.message import Message, MessageType
 from suprime.peers import PeerState, PeerTable
 from suprime.store import DistributedStore, Entry, Version
 from suprime.identity import NodeID
+
+
+# -- aggregate -------------------------------------------------------------
+
+def test_mass_half():
+    original = _Mass(s=10.0, w=2.0)
+    halved = original.half()
+    assert halved.s == 5.0
+    assert halved.w == 1.0
+    assert original.s == 10.0
+    assert original.w == 2.0
 
 
 # -- message ---------------------------------------------------------------
