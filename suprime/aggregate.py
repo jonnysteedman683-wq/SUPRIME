@@ -75,7 +75,7 @@ class PushSumAggregator:
         return self._estimate.get(key)
 
     def keys(self) -> List[str]:
-        return list(set(self._inbox) | set(self._estimate))
+        return list(self._inbox.keys() | self._estimate.keys())
 
     # -- protocol -----------------------------------------------------------
 
