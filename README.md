@@ -33,6 +33,9 @@ From that single channel, higher-level behaviour *emerges*:
   ChaCha20 encryption, WAL+snapshot persistence, metrics/observability, a
   distributed KV database, and a deterministic simulation tester (see
   [Production & trust](#production--trust)).
+- 🧠 **Collective-AI agent layer** — give each node a pluggable *brain* and a
+  fleet of brains behaves as one resilient collective: shared memory, work
+  distribution, and quorum voting (see [Collective AI](#collective-ai)).
 
 It is intentionally small, dependency-free (pure Python standard library) and
 readable — a working laboratory for distributed-systems ideas.
@@ -398,6 +401,37 @@ reordering, latency, partitions and crash/restart — reproducibly. The test sui
 asserts convergence, exactly-once execution and no lost writes across many seeds;
 a failure reproduces from its seed. (This harness already caught and drove a real
 fix — bootstrap-JOIN retry for nodes whose initial join was dropped.)
+
+## Collective AI
+
+SUPRIME isn't itself an AI — it's the coordination layer you run AI *on top of*.
+The `Agent` wraps a node with a pluggable **brain** (`brain(task, agent)` — a
+rule, a local model, or an LLM call) and wires it to the swarm so a fleet of
+brains behaves as one resilient collective: they **think** (execute work),
+**remember** (a shared blackboard), **communicate** (pub/sub), and **decide
+together** (trust-weighted quorum voting that outvotes wrong or adversarial
+members).
+
+```python
+from suprime import Agent, build_agents
+
+def classify(question):            # a "brain" — swap for a model or LLM call
+    return "spam" if "buy now" in question else "ham"
+
+agents = build_agents(nodes)
+for a in agents:
+    a.answer_with(classify)
+
+qid = await agents[0].ask("buy now cheap pills")
+# ...swarm settles...
+agents[0].consensus(qid)           # -> "spam" (ensemble, robust to a faulty agent)
+```
+
+Other faculties: `assign()/result()` (distributed work via the task board),
+`remember()/recall()` (shared memory), `announce()/listen()` (pub/sub),
+`vote()/consensus()` (collective decisions). Making it a *real* AI is just
+choosing the brain — e.g. `a.answer_with(lambda q: call_llm(q))`. See
+`examples/collective_ai.py`.
 
 ## Deployment
 

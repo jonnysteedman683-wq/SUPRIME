@@ -20,6 +20,7 @@ Quick start::
     asyncio.run(main())
 """
 
+from .agent import Agent, build_agents
 from .aggregate import PushSumAggregator
 from .antientropy import AntiEntropy
 from .byzantine import ByzantineConsensus, QuorumRegister, TrustLedger
@@ -111,6 +112,8 @@ __all__ = [
     "SignedTransport",
     "EncryptedTransport",
     "secure_transport",
+    "Agent",
+    "build_agents",
     "KVStore",
     "PersistenceManager",
     "MetricsRegistry",
