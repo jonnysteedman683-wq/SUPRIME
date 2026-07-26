@@ -43,6 +43,21 @@ def test_gcounter_merge_converges():
     assert a.value == b.value == 8
 
 
+def test_gcounter_merge_returns_false_if_no_change():
+    a, b = GCounter("a"), GCounter("b")
+    a.increment(3)
+    b.increment(2)
+
+    # Initial merge should return True
+    assert a.merge(b) is True
+
+    # Merging again with the same or lesser state should return False
+    assert a.merge(b) is False
+
+    # Merging an empty counter should return False
+    assert a.merge(GCounter("c")) is False
+
+
 def test_pncounter_inc_dec():
     a, b = PNCounter("a"), PNCounter("b")
     a.increment(10)
