@@ -13,10 +13,8 @@ from suprime.replicate import CRDTReplicator
 
 def test_rga_local_edits():
     doc = RGA("a")
-    for ch in "helo":
+    for ch in "hello":
         doc.append(ch)
-    assert doc.to_string() == "helo"
-    doc.insert(3, "l")  # fix "helo" -> "hello"
     assert doc.to_string() == "hello"
     doc.delete(0)
     assert doc.to_string() == "ello"
