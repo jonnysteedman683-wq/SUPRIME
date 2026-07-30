@@ -55,8 +55,8 @@ class VectorClock:
                 less = True
             elif a > b:
                 greater = True
-        if less and greater:
-            return "concurrent"
+            if less and greater:
+                return "concurrent"
         if less:
             return "before"
         if greater:

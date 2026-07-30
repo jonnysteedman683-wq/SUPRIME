@@ -112,11 +112,12 @@ class PlumtreeBroadcast:
     def _sync_neighbors(self) -> None:
         current = set(self._neighbors())
         # New neighbours start eager (part of the tree until pruned).
-        for n in current - (self.eager | self.lazy):
-            self.eager.add(n)
+        for n in current:
+            if n not in self.eager and n not in self.lazy:
+                self.eager.add(n)
         # Drop neighbours that left.
-        self.eager &= current
-        self.lazy &= current
+        self.eager.intersection_update(current)
+        self.lazy.intersection_update(current)
 
     # -- push helpers -------------------------------------------------------
 

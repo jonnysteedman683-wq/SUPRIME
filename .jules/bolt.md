@@ -4,3 +4,6 @@
 ## 2024-07-25 - [Suboptimal Generator Conversion to Set]
 **Learning:** Constructing intermediate sets (e.g., `set(local) | set(remote)`) for dictionary key iteration creates unnecessary overhead in memory and time. Python 3 provides dictionary views (`local.keys() | remote.keys()`) that are zero-copy, memory-efficient, and faster for these set operations.
 **Action:** Use dictionary view set operations (`.keys() | .keys()`, `.keys() & .keys()`, etc.) instead of explicitly casting dictionaries to sets when working with dictionary keys in union, intersection, or difference operations.
+## 2024-07-26 - [Set Operation and Loop Short-Circuiting Improvements]
+**Learning:** Constructing intermediate sets (e.g., `a - (b | c)`) for difference operations creates unnecessary overhead in memory and time. Direct iteration with membership checks is often faster. Also, in algorithms that determine a boolean combination of flags (like vector clock `compare` checking both `less` and `greater`), checking the condition inside the loop allows for an early return, avoiding unnecessary iteration over remaining elements.
+**Action:** Use direct membership checks (`not in`) and in-place updates (`.intersection_update()`) instead of explicitly creating intermediate union sets when filtering. Short-circuit loops early as soon as the target state is identified.
