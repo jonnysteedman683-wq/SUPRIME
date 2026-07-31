@@ -166,10 +166,11 @@ class ORSet:
             self._removed.add(tag)
 
     def contains(self, element: Any) -> bool:
-        return bool(self._adds.get(element, set()) - self._removed)
+        tags = self._adds.get(element)
+        return bool(tags and not tags.issubset(self._removed))
 
     def elements(self) -> Set[Any]:
-        return {e for e, tags in self._adds.items() if tags - self._removed}
+        return {e for e, tags in self._adds.items() if not tags.issubset(self._removed)}
 
     def merge(self, other: "ORSet") -> bool:
         changed = False
