@@ -190,10 +190,10 @@ class PlumtreeBroadcast:
                 await self._node.send(peer, PT_IHAVE, {"ids": ids})
 
         # Repair broken tree branches: graft lazy links we heard IHAVE from.
+        for mid in self._missing.keys() & self._received.keys():
+            self._missing.pop(mid, None)
+
         for mid in list(self._missing):
-            if mid in self._received:
-                self._missing.pop(mid, None)
-                continue
             self._missing[mid] += 1
             if self._missing[mid] >= self._graft_timeout:
                 candidates = self._ihave_from.get(mid) or []

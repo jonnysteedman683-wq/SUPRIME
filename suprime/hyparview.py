@@ -290,9 +290,5 @@ class HyParView:
         Wire this to the node's failure detector to trigger overlay repair when
         peers die.
         """
-        for nid in list(self.active):
-            if nid not in alive_ids:
-                self.active.discard(nid)
-        for nid in list(self.passive):
-            if nid not in alive_ids:
-                self.passive.discard(nid)
+        self.active.intersection_update(alive_ids)
+        self.passive.intersection_update(alive_ids)

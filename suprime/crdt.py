@@ -162,14 +162,14 @@ class ORSet:
         self._adds.setdefault(element, set()).add(self._fresh_tag())
 
     def remove(self, element: Any) -> None:
-        for tag in self._adds.get(element, set()):
-            self._removed.add(tag)
+        if element in self._adds:
+            self._removed.update(self._adds[element])
 
     def contains(self, element: Any) -> bool:
-        return bool(self._adds.get(element, set()) - self._removed)
+        return not self._adds.get(element, set()) <= self._removed
 
     def elements(self) -> Set[Any]:
-        return {e for e, tags in self._adds.items() if tags - self._removed}
+        return {e for e, tags in self._adds.items() if not tags <= self._removed}
 
     def merge(self, other: "ORSet") -> bool:
         changed = False
