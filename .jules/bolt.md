@@ -7,3 +7,6 @@
 ## 2024-07-26 - [Set Operation and Loop Short-Circuiting Improvements]
 **Learning:** Constructing intermediate sets (e.g., `a - (b | c)`) for difference operations creates unnecessary overhead in memory and time. Direct iteration with membership checks is often faster. Also, in algorithms that determine a boolean combination of flags (like vector clock `compare` checking both `less` and `greater`), checking the condition inside the loop allows for an early return, avoiding unnecessary iteration over remaining elements.
 **Action:** Use direct membership checks (`not in`) and in-place updates (`.intersection_update()`) instead of explicitly creating intermediate union sets when filtering. Short-circuit loops early as soon as the target state is identified.
+## 2024-07-27 - [Set Difference for Node Filtering]
+**Learning:** List comprehensions to filter out specific nodes (e.g., `[p for p in pool if p != src and p != nid]`) when `pool` is a set are slower than `list(pool - {src, nid})` due to Python iterating and evaluating the condition per element instead of using fast, C-level set difference algorithms.
+**Action:** When filtering a small number of known elements out of a set to create a list, construct a temporary set of the items to exclude and use the set difference operator `-`, then cast back to a list (e.g. `list(pool - {src, nid})`).
