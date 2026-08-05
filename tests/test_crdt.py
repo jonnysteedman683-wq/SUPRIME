@@ -137,6 +137,22 @@ def test_mvregister_causal_overwrite():
     assert a.values() == ["second"]
 
 
+def test_mvregister_digest_apply():
+    a = MVRegister("a")
+    a.set("first")
+    b = MVRegister("b")
+    b.set("second")
+    a.merge(b)
+
+    digest = a.digest()
+    c = MVRegister("c")
+    changed = c.apply_digest(digest)
+
+    assert changed is True
+    assert set(c.values()) == {"first", "second"}
+    assert c.digest() == digest
+
+
 # -- replication over the swarm --------------------------------------------
 
 @pytest.mark.asyncio
