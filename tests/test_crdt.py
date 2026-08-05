@@ -68,6 +68,23 @@ def test_pncounter_inc_dec():
     assert a.value == b.value == 8
 
 
+def test_pncounter_apply_digest():
+    a = PNCounter("a")
+    a.increment(5)
+    a.decrement(2)
+
+    b = PNCounter("b")
+    b.increment(1)
+
+    changed = b.apply_digest(a.digest())
+    assert changed is True
+    assert b.value == 4
+
+    changed_again = b.apply_digest(a.digest())
+    assert changed_again is False
+
+
+
 def test_crdt_merge_is_order_independent():
     # three replicas each make a distinct increment; every merge order agrees
     results = set()
