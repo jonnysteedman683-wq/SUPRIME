@@ -175,7 +175,7 @@ class HyParView:
         if ttl == self._prwl:
             self._add_passive(nid)
         # Forward to a random active peer other than the sender.
-        candidates = [p for p in self.active if p != message.src and p != nid]
+        candidates = list(self.active - {message.src, nid})
         if candidates:
             nxt = self._rng.choice(candidates)
             await self._send(
@@ -234,7 +234,7 @@ class HyParView:
         origin = message.payload["origin"]
         self._record(origin, message.payload["origin_addr"])
         if ttl > 0 and self.active:
-            candidates = [p for p in self.active if p != message.src]
+            candidates = list(self.active - {message.src})
             if candidates:
                 fwd = dict(message.payload)
                 fwd["ttl"] = ttl
@@ -262,7 +262,7 @@ class HyParView:
             self._add_passive(nid)
 
     def _sample(self, pool: Set[str], k: int) -> List[str]:
-        items = [p for p in pool if p != self._id]
+        items = list(pool - {self._id})
         if len(items) <= k:
             return items
         return self._rng.sample(items, k)
