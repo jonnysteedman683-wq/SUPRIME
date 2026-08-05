@@ -186,3 +186,29 @@ def test_nodeid_validation():
     # None should fail
     with pytest.raises(ValueError, match="NodeID value must be a non-empty string"):
         NodeID(None)  # type: ignore
+
+def test_peer_apply_digest():
+    pt = PeerTable("self")
+    entries = [
+        {"node_id": "p1", "address": "addr1", "heartbeat": 1},
+        {"node_id": "self", "address": "addr2", "heartbeat": 10},
+    ]
+    # First application should return True because p1 is new.
+    # self should be ignored.
+    assert pt.apply_digest(entries) is True
+
+    p1 = pt.get("p1")
+    assert p1 is not None
+    assert p1.heartbeat == 1
+    assert pt.get("self") is None
+
+    # Re-applying should return False as there are no changes.
+    assert pt.apply_digest(entries) is False
+
+    # Increment heartbeat for p1
+    entries[0]["heartbeat"] = 2
+    assert pt.apply_digest(entries) is True
+
+    p1 = pt.get("p1")
+    assert p1 is not None
+    assert p1.heartbeat == 2
