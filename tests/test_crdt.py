@@ -198,3 +198,20 @@ def test_mvregister_digest():
     assert versions[0][1] == {"a": 1}
     assert versions[1][0] == "second"
     assert versions[1][1] == {"b": 1}
+
+def test_orset_apply_digest():
+    a = ORSet("a")
+    a.add("x")
+    a.add("y")
+    a.remove("x")
+
+    digest = a.digest()
+
+    b = ORSet("b")
+    b.apply_digest(digest)
+
+    assert b.contains("y")
+    assert not b.contains("x")
+    assert b.elements() == {"y"}
+    assert a._adds == b._adds
+    assert a._removed == b._removed
