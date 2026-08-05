@@ -95,6 +95,27 @@ def test_store_subscribe_notifies_on_change():
     assert ("k", 42) in seen
 
 
+def test_store_digest_and_apply():
+    s1 = DistributedStore("n1")
+    s1.set("k1", 1)
+    s1.set("k2", 2)
+    s1.delete("k2")
+
+    digest = s1.digest()
+    assert "k1" in digest
+    assert digest["k1"]["value"] == 1
+    assert "k2" in digest
+    assert digest["k2"]["deleted"] is True
+
+    s2 = DistributedStore("n2")
+    s2.apply_digest(digest)
+
+    assert s2.get("k1") == 1
+    assert "k1" in s2
+    assert s2.get("k2") is None
+    assert "k2" not in s2
+
+
 # -- peers / failure detection --------------------------------------------
 
 def test_peer_merge_and_heartbeat_progress():
