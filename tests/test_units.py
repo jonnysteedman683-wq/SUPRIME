@@ -38,6 +38,39 @@ def test_message_round_trip():
     assert restored.id == msg.id
 
 
+def test_message_from_dict():
+    data = {
+        "type": MessageType.DIRECT,
+        "src": "a",
+        "payload": {"x": 1},
+        "dst": "b",
+        "id": "test-id",
+        "ts": 123.45,
+    }
+    msg = Message.from_dict(data)
+    assert msg.type == MessageType.DIRECT
+    assert msg.src == "a"
+    assert msg.payload == {"x": 1}
+    assert msg.dst == "b"
+    assert msg.id == "test-id"
+    assert msg.ts == 123.45
+
+
+def test_message_from_dict_defaults():
+    data = {
+        "type": MessageType.GOSSIP,
+        "src": "a",
+    }
+    msg = Message.from_dict(data)
+
+    assert msg.type == MessageType.GOSSIP
+    assert msg.src == "a"
+    assert msg.payload == {}
+    assert msg.dst is None
+    assert isinstance(msg.id, str)
+    assert isinstance(msg.ts, float)
+
+
 # -- store -----------------------------------------------------------------
 
 def test_store_basic_set_get_delete():
