@@ -186,3 +186,22 @@ def test_nodeid_validation():
     # None should fail
     with pytest.raises(ValueError, match="NodeID value must be a non-empty string"):
         NodeID(None)  # type: ignore
+
+def test_entry_to_dict():
+    v1 = Version(ts=1.5, origin="node1")
+    e1 = Entry(value="test_value", version=v1, deleted=True)
+    assert e1.to_dict() == {
+        "value": "test_value",
+        "ts": 1.5,
+        "origin": "node1",
+        "deleted": True,
+    }
+
+    v2 = Version(ts=2.0, origin="node2")
+    e2 = Entry(value=None, version=v2, deleted=False)
+    assert e2.to_dict() == {
+        "value": None,
+        "ts": 2.0,
+        "origin": "node2",
+        "deleted": False,
+    }
