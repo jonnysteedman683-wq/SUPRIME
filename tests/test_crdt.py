@@ -174,3 +174,27 @@ async def test_orset_replicates_across_swarm(cluster: Cluster):
     await cluster.settle(nodes, rounds=30)
     for s in sets:
         assert s.elements() == {"alice", "bob", "carol"}
+
+def test_mvregister_digest():
+    a = MVRegister("a")
+    a.set("first")
+    b = MVRegister("b")
+    b.set("second")
+    a.merge(b)
+
+    digest = a.digest()
+
+    assert "versions" in digest
+    assert "vc" in digest
+    assert digest["vc"] == {"a": 1, "b": 1}
+
+    versions = digest["versions"]
+    assert len(versions) == 2
+
+    # Sort versions by value to ensure consistent assertion
+    versions.sort(key=lambda x: x[0])
+
+    assert versions[0][0] == "first"
+    assert versions[0][1] == {"a": 1}
+    assert versions[1][0] == "second"
+    assert versions[1][1] == {"b": 1}
