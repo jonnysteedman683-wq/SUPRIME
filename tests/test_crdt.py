@@ -107,6 +107,20 @@ def test_orset_concurrent_add_wins():
 
 # -- LWW map ---------------------------------------------------------------
 
+
+def test_lwwmap_digest():
+    clock = [0.0]
+    a = LWWMap("a", clock=lambda: clock[0])
+    a.set("k1", "v1")
+    clock[0] = 1.0
+    a.set("k2", "v2")
+
+    d = a.digest()
+    assert d == {
+        "k1": ["v1", 0.0, "a"],
+        "k2": ["v2", 1.0, "a"],
+    }
+
 def test_lwwmap_last_writer_wins():
     clock = [0.0]
     a = LWWMap("a", clock=lambda: clock[0])
