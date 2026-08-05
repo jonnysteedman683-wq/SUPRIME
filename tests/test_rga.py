@@ -79,3 +79,19 @@ async def test_rga_replicates_across_swarm(cluster: Cluster):
     strings = {d.to_string() for d in docs}
     assert len(strings) == 1  # all replicas converged to identical text
     assert set(next(iter(strings))) == {"A", "B", "C"}
+
+def test_rga_apply_digest():
+    a = RGA("a")
+    for ch in "hello":
+        a.append(ch)
+
+    b = RGA("b")
+    # Apply digest from a to b
+    changed = b.apply_digest(a.digest())
+
+    assert changed is True
+    assert b.to_string() == "hello"
+
+    # Applying again should not change anything
+    changed_again = b.apply_digest(a.digest())
+    assert changed_again is False
