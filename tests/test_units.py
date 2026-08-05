@@ -186,3 +186,37 @@ def test_nodeid_validation():
     # None should fail
     with pytest.raises(ValueError, match="NodeID value must be a non-empty string"):
         NodeID(None)  # type: ignore
+
+def test_store_digest():
+    s = DistributedStore("a")
+    s.set("k1", "v1")
+    s.set("k2", "v2")
+    s.delete("k2")
+
+    digest = s.digest()
+
+    assert "k1" in digest
+    assert digest["k1"]["value"] == "v1"
+    assert digest["k1"]["deleted"] is False
+    assert "ts" in digest["k1"]
+    assert "origin" in digest["k1"]
+
+    assert "k2" in digest
+    assert digest["k2"]["value"] is None
+    assert digest["k2"]["deleted"] is True
+    assert "ts" in digest["k2"]
+    assert "origin" in digest["k2"]
+
+def test_store_apply_digest():
+    s1 = DistributedStore("a")
+    s1.set("k1", "v1")
+    s1.set("k2", "v2")
+    s1.delete("k2")
+
+    s2 = DistributedStore("b")
+    changed = s2.apply_digest(s1.digest())
+
+    assert changed is True
+    assert s2.get("k1") == "v1"
+    assert s2.get("k2") is None
+    assert s2.tombstones() == 1
