@@ -139,6 +139,52 @@ def test_fresh_heartbeat_revives_suspect():
     assert pt.get("p1").state is PeerState.ALIVE
 
 
+def test_peer_table_apply_digest():
+    pt1 = PeerTable("node1")
+    pt1.merge("node2", "addr2", 1)
+    pt1.merge("node3", "addr3", 5)
+
+    pt2 = PeerTable("node2")
+
+    # pt2 learns about node3; its own record (node2) is ignored
+    changed = pt2.apply_digest(pt1.digest())
+    assert changed is True
+    assert len(pt2) == 1
+    assert pt2.get("node3").heartbeat == 5
+    assert pt2.get("node2") is None # ignored self
+
+    # Manually add entries, including node1
+    entries = [
+        {"node_id": "node1", "address": "addr1", "heartbeat": 10},
+        {"node_id": "node3", "address": "addr3", "heartbeat": 5}, # no change
+        {"node_id": "node4", "address": "addr4", "heartbeat": 2},
+    ]
+    changed = pt2.apply_digest(entries)
+    assert changed is True
+    assert len(pt2) == 3
+    assert pt2.get("node1").heartbeat == 10
+    assert pt2.get("node4").heartbeat == 2
+
+    # Applying the same entries should return False
+    changed = pt2.apply_digest(entries)
+    assert changed is False
+
+    # Applying a newer heartbeat should return True
+    entries = [
+        {"node_id": "node1", "address": "addr1", "heartbeat": 11}
+    ]
+    changed = pt2.apply_digest(entries)
+    assert changed is True
+    assert pt2.get("node1").heartbeat == 11
+
+    # Ignoring self directly
+    entries = [
+        {"node_id": "node2", "address": "addr2", "heartbeat": 99}
+    ]
+    changed = pt2.apply_digest(entries)
+    assert changed is False
+
+
 # -- consensus -------------------------------------------------------------
 
 def test_elect_leader_smallest_id():
