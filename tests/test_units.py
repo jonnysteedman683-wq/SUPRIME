@@ -150,6 +150,19 @@ def test_peer_ignores_self():
     assert len(pt) == 0
 
 
+def test_peer_table_digest():
+    pt = PeerTable("self")
+    pt.merge("p1", "addr1", 1)
+    pt.merge("p2", "addr2", 2)
+
+    digest = pt.digest()
+
+    assert len(digest) == 2
+    # Order is not guaranteed since PeerTable is backed by a dict
+    assert {"node_id": "p1", "address": "addr1", "heartbeat": 1} in digest
+    assert {"node_id": "p2", "address": "addr2", "heartbeat": 2} in digest
+
+
 def test_failure_detection_transitions():
     clock = [0.0]
     pt = PeerTable("self", suspect_after=3.0, dead_after=6.0, clock=lambda: clock[0])
