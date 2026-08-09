@@ -50,6 +50,23 @@ def test_store_basic_set_get_delete():
     assert "k" not in s
 
 
+def test_store_digest():
+    s = DistributedStore("n1")
+    s.set("k1", "v1")
+    s.set("k2", "v2")
+    s.delete("k2")
+    d = s.digest()
+    assert "k1" in d
+    assert d["k1"]["value"] == "v1"
+    assert d["k1"]["origin"] == "n1"
+    assert d["k1"]["deleted"] is False
+    assert "k2" in d
+    assert d["k2"]["value"] is None
+    assert d["k2"]["origin"] == "n1"
+    assert d["k2"]["deleted"] is True
+
+
+
 def test_store_lww_higher_timestamp_wins():
     a = DistributedStore("a")
     b = DistributedStore("b")
