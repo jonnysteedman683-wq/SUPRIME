@@ -10,3 +10,6 @@
 ## 2024-07-27 - [Set Difference for Node Filtering]
 **Learning:** List comprehensions to filter out specific nodes (e.g., `[p for p in pool if p != src and p != nid]`) when `pool` is a set are slower than `list(pool - {src, nid})` due to Python iterating and evaluating the condition per element instead of using fast, C-level set difference algorithms.
 **Action:** When filtering a small number of known elements out of a set to create a list, construct a temporary set of the items to exclude and use the set difference operator `-`, then cast back to a list (e.g. `list(pool - {src, nid})`).
+## 2024-07-28 - [Set Operations with intersection_update]
+**Learning:** Iterating over a list conversion of a set to conditionally remove items using `discard` is significantly slower than using the built-in C-level set method `intersection_update` (or `difference_update`).
+**Action:** Always prefer `a.intersection_update(b)` over `for item in list(a): if item not in b: a.discard(item)` for optimizing Python set intersections/removals in performance-critical code.
