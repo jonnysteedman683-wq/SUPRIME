@@ -292,10 +292,16 @@ class MVRegister:
 
             if not found:
                 kept.append((val, vc))
-        changed = {id(v) for v in kept} != {id(v) for v in self._versions}
+        changed = False
+        if len(kept) != len(self._versions):
+            changed = True
+        else:
+            old_ids = {id(v) for v in self._versions}
+            if any(id(v) not in old_ids for v in kept):
+                changed = True
         self._versions = kept
         self._vc = self._vc.merge(other._vc)
-        return changed or len(kept) != len(self._versions)
+        return changed
 
     def digest(self) -> Dict[str, Any]:
         return {
