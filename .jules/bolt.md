@@ -13,3 +13,6 @@
 ## 2024-07-28 - [Set Operations with intersection_update]
 **Learning:** Iterating over a list conversion of a set to conditionally remove items using `discard` is significantly slower than using the built-in C-level set method `intersection_update` (or `difference_update`).
 **Action:** Always prefer `a.intersection_update(b)` over `for item in list(a): if item not in b: a.discard(item)` for optimizing Python set intersections/removals in performance-critical code.
+## 2024-07-29 - [Optimize Set Comparison Memory Allocation]
+**Learning:** Checking equality of two generated sets of object IDs (e.g. `{id(v) for v in a} != {id(v) for v in b}`) is memory intensive as it builds two temporary sets before comparison.
+**Action:** When asserting identical contents between a generated subset and its source list, evaluate list lengths first, then fallback to an `any(...)` generator expression against a single set of the source IDs to avoid dual temporary set allocations.
