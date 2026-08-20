@@ -47,19 +47,26 @@ class VectorClock:
 
     def compare(self, other: "VectorClock") -> str:
         """Return ``'before'``, ``'after'``, ``'equal'`` or ``'concurrent'``."""
-        keys = self.clock.keys() | other.clock.keys()
-        less = greater = False
-        for k in keys:
-            a, b = self.clock.get(k, 0), other.clock.get(k, 0)
+        is_smaller = is_larger = False
+        for k, a in self.clock.items():
+            b = other.clock.get(k, 0)
             if a < b:
-                less = True
+                is_smaller = True
             elif a > b:
-                greater = True
-            if less and greater:
+                is_larger = True
+            if is_smaller and is_larger:
                 return "concurrent"
-        if less:
+
+        for k, b in other.clock.items():
+            if k not in self.clock:
+                if b > 0:
+                    is_smaller = True
+                if is_smaller and is_larger:
+                    return "concurrent"
+
+        if is_smaller:
             return "before"
-        if greater:
+        if is_larger:
             return "after"
         return "equal"
 
@@ -170,6 +177,8 @@ class ORSet:
         return bool(tags and not tags.issubset(self._removed))
 
     def elements(self) -> Set[Any]:
+        if not self._removed:
+            return set(self._adds.keys())
         return {e for e, tags in self._adds.items() if not tags.issubset(self._removed)}
 
     def merge(self, other: "ORSet") -> bool:
