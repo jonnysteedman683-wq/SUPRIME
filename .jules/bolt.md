@@ -16,3 +16,6 @@
 ## 2024-07-29 - [Optimize Set Comparison Memory Allocation]
 **Learning:** Checking equality of two generated sets of object IDs (e.g. `{id(v) for v in a} != {id(v) for v in b}`) is memory intensive as it builds two temporary sets before comparison.
 **Action:** When asserting identical contents between a generated subset and its source list, evaluate list lengths first, then fallback to an `any(...)` generator expression against a single set of the source IDs to avoid dual temporary set allocations.
+## 2024-07-30 - [Optimize List Partitioning]
+**Learning:** Iterating over a list twice with two separate list comprehensions (e.g., `[x for x in list if cond]` and `[x for x in list if not cond]`) to partition it based on a condition creates unnecessary overhead.
+**Action:** When partitioning a list into two subsets based on a condition, use a single `for` loop to evaluate the condition once and append elements to separate lists to improve execution speed by avoiding redundant iteration.
