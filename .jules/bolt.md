@@ -16,3 +16,6 @@
 ## 2024-07-29 - [Optimize Set Comparison Memory Allocation]
 **Learning:** Checking equality of two generated sets of object IDs (e.g. `{id(v) for v in a} != {id(v) for v in b}`) is memory intensive as it builds two temporary sets before comparison.
 **Action:** When asserting identical contents between a generated subset and its source list, evaluate list lengths first, then fallback to an `any(...)` generator expression against a single set of the source IDs to avoid dual temporary set allocations.
+## 2024-08-27 - [Optimize redundant iterations and list comprehensions]
+**Learning:** Using multiple list comprehensions or multiple `sum()` generator expressions over the same collection (e.g. `due = [item for item in q if cond]; rem = [item for item in q if not cond]`) iterates the sequence redundantly and builds intermediate list structures that can be slow.
+**Action:** When calculating multiple aggregates or partitioning collections based on a single pass evaluation, replace multiple list comprehensions/generators with a single `for` loop that updates all needed variables (or partitioned lists) at once.
