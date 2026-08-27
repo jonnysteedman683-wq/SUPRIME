@@ -83,7 +83,11 @@ class PushSumAggregator:
         for key, masses in list(self._inbox.items()):
             if not masses:
                 continue
-            total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))
+            s_tot, w_tot = 0.0, 0.0
+            for m in masses:
+                s_tot += m.s
+                w_tot += m.w
+            total = _Mass(s_tot, w_tot)
             self._inbox[key] = []
             if total.w > 0:
                 self._estimate[key] = total.s / total.w
