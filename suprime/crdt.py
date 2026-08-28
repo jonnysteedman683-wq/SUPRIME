@@ -48,18 +48,21 @@ class VectorClock:
     def compare(self, other: "VectorClock") -> str:
         """Return ``'before'``, ``'after'``, ``'equal'`` or ``'concurrent'``."""
         keys = self.clock.keys() | other.clock.keys()
-        less = greater = False
+        ls = gt = False
         for k in keys:
-            a, b = self.clock.get(k, 0), other.clock.get(k, 0)
+            a = self.clock.get(k, 0)
+            b = other.clock.get(k, 0)
             if a < b:
-                less = True
+                ls = True
+                if gt:
+                    return "concurrent"
             elif a > b:
-                greater = True
-            if less and greater:
-                return "concurrent"
-        if less:
+                gt = True
+                if ls:
+                    return "concurrent"
+        if ls:
             return "before"
-        if greater:
+        if gt:
             return "after"
         return "equal"
 
