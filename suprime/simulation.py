@@ -92,8 +92,14 @@ class SimNetwork:
 
     def flush_due(self) -> None:
         """Deliver every message whose delivery time has arrived, in seed order."""
-        due = [item for item in self._queue if item[0] <= self._clock.t]
-        self._queue = [item for item in self._queue if item[0] > self._clock.t]
+        due = []
+        rem = []
+        for item in self._queue:
+            if item[0] <= self._clock.t:
+                due.append(item)
+            else:
+                rem.append(item)
+        self._queue = rem
         # Shuffle same-time deliveries deterministically to exercise reordering.
         self._rng.shuffle(due)
         due.sort(key=lambda it: it[0])
