@@ -42,21 +42,30 @@ class VectorClock:
     def merge(self, other: "VectorClock") -> "VectorClock":
         merged = dict(self.clock)
         for k, v in other.clock.items():
-            merged[k] = max(merged.get(k, 0), v)
+            if v > merged.get(k, 0):
+                merged[k] = v
         return VectorClock(merged)
 
     def compare(self, other: "VectorClock") -> str:
         """Return ``'before'``, ``'after'``, ``'equal'`` or ``'concurrent'``."""
-        keys = self.clock.keys() | other.clock.keys()
         less = greater = False
-        for k in keys:
-            a, b = self.clock.get(k, 0), other.clock.get(k, 0)
+        for k, a in self.clock.items():
+            b = other.clock.get(k, 0)
             if a < b:
                 less = True
             elif a > b:
                 greater = True
             if less and greater:
                 return "concurrent"
+        for k, b in other.clock.items():
+            if k not in self.clock:
+                a = 0
+                if a < b:
+                    less = True
+                elif a > b:
+                    greater = True
+                if less and greater:
+                    return "concurrent"
         if less:
             return "before"
         if greater:

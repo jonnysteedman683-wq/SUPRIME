@@ -16,3 +16,6 @@
 ## 2024-07-29 - [Optimize Set Comparison Memory Allocation]
 **Learning:** Checking equality of two generated sets of object IDs (e.g. `{id(v) for v in a} != {id(v) for v in b}`) is memory intensive as it builds two temporary sets before comparison.
 **Action:** When asserting identical contents between a generated subset and its source list, evaluate list lengths first, then fallback to an `any(...)` generator expression against a single set of the source IDs to avoid dual temporary set allocations.
+## 2024-07-30 - [Optimize List Partitioning and Generator Overhead]
+**Learning:** List comprehensions to partition a list into two lists requires iterating twice. Using a single `for` loop to append to separate lists is much faster. Also, in Python, `max(dict.get(key, 0), v)` is slower than an inline `if v > dict.get(key, 0): dict[key] = v` due to function call overhead.
+**Action:** When partitioning a list into two subsets based on a condition, use a single `for` loop to append to separate lists rather than two separate list comprehensions to improve performance by avoiding redundant iteration. To improve performance in tight or hot loops, avoid function call overhead (such as using `max()`) by replacing it with a simple inline `if` statement.
