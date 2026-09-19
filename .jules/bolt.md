@@ -16,3 +16,6 @@
 ## 2024-07-29 - [Optimize Set Comparison Memory Allocation]
 **Learning:** Checking equality of two generated sets of object IDs (e.g. `{id(v) for v in a} != {id(v) for v in b}`) is memory intensive as it builds two temporary sets before comparison.
 **Action:** When asserting identical contents between a generated subset and its source list, evaluate list lengths first, then fallback to an `any(...)` generator expression against a single set of the source IDs to avoid dual temporary set allocations.
+## 2024-08-01 - [Avoid Multiple List Comprehensions for Summing Parallel Aggregates]
+**Learning:** Calling `sum` over multiple list comprehensions (e.g., `total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))`) results in multiple iterations over the original list and the creation of multiple intermediate lists in memory.
+**Action:** When calculating multiple aggregates concurrently over the same sequence of objects, use a single inline `for` loop with accumulator variables to combine operations in one pass and eliminate intermediate allocations, significantly speeding up execution.
