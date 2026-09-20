@@ -49,14 +49,18 @@ class VectorClock:
         """Return ``'before'``, ``'after'``, ``'equal'`` or ``'concurrent'``."""
         keys = self.clock.keys() | other.clock.keys()
         less = greater = False
+        s_clock = self.clock
+        o_clock = other.clock
         for k in keys:
-            a, b = self.clock.get(k, 0), other.clock.get(k, 0)
+            a, b = s_clock.get(k, 0), o_clock.get(k, 0)
             if a < b:
                 less = True
+                if greater:
+                    return "concurrent"
             elif a > b:
                 greater = True
-            if less and greater:
-                return "concurrent"
+                if less:
+                    return "concurrent"
         if less:
             return "before"
         if greater:
