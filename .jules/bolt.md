@@ -19,3 +19,10 @@
 ## 2024-08-01 - [Avoid Multiple List Comprehensions for Summing Parallel Aggregates]
 **Learning:** Calling `sum` over multiple list comprehensions (e.g., `total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))`) results in multiple iterations over the original list and the creation of multiple intermediate lists in memory.
 **Action:** When calculating multiple aggregates concurrently over the same sequence of objects, use a single inline `for` loop with accumulator variables to combine operations in one pass and eliminate intermediate allocations, significantly speeding up execution.
+## 2024-08-05 - [Optimize Iteration Inside Push-Sum Aggregation]
+**Learning:** Caching attributes and eliminating intermediate instances instantiation such as `_Mass(total.s, total.w)` where only simple properties (`float`) are needed saves massive time during gossip hot loops.
+**Action:** When computing aggregates over instances inside a tight loop, flatten mathematical operations to native types (`float`) as much as possible rather than encapsulating them into intermediate dataclass objects immediately.
+
+## 2024-08-05 - [Cache Instance Attributes in Hot Loops]
+**Learning:** Repeated lookups of attributes like `self.clock` or `self._inbox` inside loops generate significant overhead.
+**Action:** To improve performance in tight or hot loops, cache instance attribute accesses into local variables before the loop to reduce attribute lookup overhead.
