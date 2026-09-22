@@ -84,6 +84,18 @@ class PushSumAggregator:
             if not masses:
                 continue
             total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))
+            total_s = 0.0
+            total_w = 0.0
+            for m in masses:
+                total_s += m.s
+                total_w += m.w
+            total = _Mass(total_s, total_w)
+            s_sum = 0.0
+            w_sum = 0.0
+            for m in masses:
+                s_sum += m.s
+                w_sum += m.w
+            total = _Mass(s_sum, w_sum)
             self._inbox[key] = []
             if total.w > 0:
                 self._estimate[key] = total.s / total.w
