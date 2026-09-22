@@ -42,7 +42,8 @@ class VectorClock:
     def merge(self, other: "VectorClock") -> "VectorClock":
         merged = dict(self.clock)
         for k, v in other.clock.items():
-            merged[k] = max(merged.get(k, 0), v)
+            cur = merged.get(k, 0)
+            merged[k] = v if v > cur else cur
         return VectorClock(merged)
 
     def compare(self, other: "VectorClock") -> str:
