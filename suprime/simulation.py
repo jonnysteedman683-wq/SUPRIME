@@ -93,6 +93,14 @@ class SimNetwork:
     def flush_due(self) -> None:
         """Deliver every message whose delivery time has arrived, in seed order."""
         due = []
+        new_queue = []
+        t = self._clock.t
+        for item in self._queue:
+            if item[0] <= t:
+                due.append(item)
+            else:
+                new_queue.append(item)
+        self._queue = new_queue
         rest = []
         for item in self._queue:
             if item[0] <= self._clock.t:
