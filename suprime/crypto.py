@@ -86,20 +86,27 @@ def _bit(h: bytes, i: int) -> int:
 def _pure_publickey(sk: bytes) -> bytes:
     """Derive a 32-byte Ed25519 public key from a 32-byte secret seed."""
     h = _H(sk)
-    a = 2 ** (_b - 2) + sum(2 ** i * _bit(h, i) for i in range(3, _b - 2))
+    a = 2 ** (_b - 2)
+    for i in range(3, _b - 2):
+        a += 2 ** i * _bit(h, i)
     A = _scalarmult(_B, a)
     return _encodepoint(A)
 
 
 def _Hint(m: bytes) -> int:
     h = _H(m)
-    return sum(2 ** i * _bit(h, i) for i in range(2 * _b))
+    s = 0
+    for i in range(2 * _b):
+        s += 2 ** i * _bit(h, i)
+    return s
 
 
 def _pure_sign(sk: bytes, pk: bytes, message: bytes) -> bytes:
     """Produce a 64-byte Ed25519 signature over ``message``."""
     h = _H(sk)
-    a = 2 ** (_b - 2) + sum(2 ** i * _bit(h, i) for i in range(3, _b - 2))
+    a = 2 ** (_b - 2)
+    for i in range(3, _b - 2):
+        a += 2 ** i * _bit(h, i)
     r = _Hint(h[_b // 8 : _b // 4] + message)
     R = _scalarmult(_B, r)
     S = (r + _Hint(_encodepoint(R) + pk + message) * a) % _l
