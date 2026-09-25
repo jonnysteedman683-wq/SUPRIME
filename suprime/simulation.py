@@ -104,19 +104,12 @@ class SimNetwork:
             else:
                 new_queue.append(item)
         self._queue = new_queue
-        rest = []
         for item in self._queue:
             if item[0] <= self._clock.t:
                 due.append(item)
             else:
                 keep.append(item)
         self._queue = keep
-                rem.append(item)
-        self._queue = rem
-                keep.append(item)
-        self._queue = keep
-                rest.append(item)
-        self._queue = rest
         # Shuffle same-time deliveries deterministically to exercise reordering.
         self._rng.shuffle(due)
         due.sort(key=lambda it: it[0])
