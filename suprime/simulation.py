@@ -94,18 +94,9 @@ class SimNetwork:
         """Deliver every message whose delivery time has arrived, in seed order."""
         due = []
         keep = []
-        rem = []
-        keep = []
-        new_queue = []
         t = self._clock.t
         for item in self._queue:
             if item[0] <= t:
-                due.append(item)
-            else:
-                new_queue.append(item)
-        self._queue = new_queue
-        for item in self._queue:
-            if item[0] <= self._clock.t:
                 due.append(item)
             else:
                 keep.append(item)
