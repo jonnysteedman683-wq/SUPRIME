@@ -27,21 +27,42 @@ def line_chart(
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
 
-    all_x = [x for _, xs, _ in series for x in xs] or [0, 1]
-    all_y = [y for _, _, ys in series for y in ys] or [0, 1]
-    xmin, xmax = min(all_x), max(all_x)
-    ymin, ymax = min(all_y), max(all_y)
+    all_x_min = float('inf')
+    all_x_max = float('-inf')
+    all_y_min = float('inf')
+    all_y_max = float('-inf')
+    has_data = False
+
+    for _, xs, ys in series:
+        if xs:
+            has_data = True
+            for x in xs:
+                if x < all_x_min: all_x_min = x
+                if x > all_x_max: all_x_max = x
+            for y in ys:
+                if y < all_y_min: all_y_min = y
+                if y > all_y_max: all_y_max = y
+
+    if has_data:
+        xmin, xmax = all_x_min, all_x_max
+        ymin, ymax = all_y_min, all_y_max
+    else:
+        xmin, xmax = 0.0, 1.0
+        ymin, ymax = 0.0, 1.0
     if xmax == xmin:
         xmax += 1
     if ymax == ymin:
         ymax += 1
     ymin = min(ymin, 0)
 
+    x_scale = plot_w / (xmax - xmin) if xmax > xmin else 1.0
+    y_scale = plot_h / (ymax - ymin) if ymax > ymin else 1.0
+
     def sx(x: float) -> float:
-        return pad_l + (x - xmin) / (xmax - xmin) * plot_w
+        return pad_l + (x - xmin) * x_scale
 
     def sy(y: float) -> float:
-        return pad_t + plot_h - (y - ymin) / (ymax - ymin) * plot_h
+        return pad_t + plot_h - (y - ymin) * y_scale
 
     parts: List[str] = []
     parts.append(
@@ -99,12 +120,18 @@ def line_chart(
     # series
     for idx, (label, xs, ys) in enumerate(series):
         color = _PALETTE[idx % len(_PALETTE)]
-        pts = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in zip(xs, ys))
+        pts_list = []
+        circle_parts = []
+        for x, y in zip(xs, ys):
+            cx = sx(x)
+            cy = sy(y)
+            pts_list.append(f"{cx:.1f},{cy:.1f}")
+            circle_parts.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="2.5" fill="{color}"/>')
+        pts = " ".join(pts_list)
         parts.append(
             f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2"/>'
         )
-        for x, y in zip(xs, ys):
-            parts.append(f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" r="2.5" fill="{color}"/>')
+        parts.extend(circle_parts)
         ly = pad_t + 8 + idx * 20
         parts.append(
             f'<rect x="{pad_l+plot_w+16}" y="{ly-9}" width="12" height="12" fill="{color}"/>'
