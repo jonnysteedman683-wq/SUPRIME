@@ -80,36 +80,29 @@ class PushSumAggregator:
     # -- protocol -----------------------------------------------------------
 
     async def _round(self) -> None:
-        for key, masses in list(self._inbox.items()):
+        inbox = self._inbox
+        for key, masses in list(inbox.items()):
             if not masses:
                 continue
-            total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))
             total_s = 0.0
             total_w = 0.0
             for m in masses:
                 total_s += m.s
                 total_w += m.w
             total = _Mass(total_s, total_w)
-            s_sum = 0.0
-            w_sum = 0.0
-            for m in masses:
-                s_sum += m.s
-                w_sum += m.w
-            total = _Mass(s_sum, w_sum)
-            self._inbox[key] = []
+            inbox[key] = []
             if total.w > 0:
                 self._estimate[key] = total.s / total.w
             # Keep half, send half to a random alive neighbour.
             keep = _Mass(total.s / 2.0, total.w / 2.0)
             send = _Mass(total.s - keep.s, total.w - keep.w)
-            self._inbox[key].append(keep)
+            inbox[key].append(keep)
             target = self._random_peer()
             if target is None:
                 # No peers: keep all mass so nothing is lost.
-                self._inbox[key].append(send)
+                inbox[key].append(send)
                 continue
             await self._node.send(target, AGG_MSG, {"key": key, "s": send.s, "w": send.w})
-
     async def _on_message(self, message: Message) -> None:
         key = message.payload["key"]
         self._inbox.setdefault(key, []).append(

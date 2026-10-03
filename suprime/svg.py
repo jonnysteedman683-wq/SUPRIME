@@ -27,15 +27,28 @@ def line_chart(
     plot_w = width - pad_l - pad_r
     plot_h = height - pad_t - pad_b
 
-    all_x = [x for _, xs, _ in series for x in xs] or [0, 1]
-    all_y = [y for _, _, ys in series for y in ys] or [0, 1]
-    xmin, xmax = min(all_x), max(all_x)
-    ymin, ymax = min(all_y), max(all_y)
-    if xmax == xmin:
+    xmin = ymin = float("inf")
+    xmax = ymax = float("-inf")
+    for _, xs, ys in series:
+        for x in xs:
+            if x < xmin: xmin = x
+            if x > xmax: xmax = x
+        for y in ys:
+            if y < ymin: ymin = y
+            if y > ymax: ymax = y
+
+    if xmin == float("inf"):
+        xmin, xmax = 0, 1
+    elif xmax == xmin:
         xmax += 1
-    if ymax == ymin:
+
+    if ymin == float("inf"):
+        ymin, ymax = 0, 1
+    elif ymax == ymin:
         ymax += 1
-    ymin = min(ymin, 0)
+
+    if ymin > 0:
+        ymin = 0
 
     def sx(x: float) -> float:
         return pad_l + (x - xmin) / (xmax - xmin) * plot_w
@@ -99,12 +112,21 @@ def line_chart(
     # series
     for idx, (label, xs, ys) in enumerate(series):
         color = _PALETTE[idx % len(_PALETTE)]
-        pts = " ".join(f"{sx(x):.1f},{sy(y):.1f}" for x, y in zip(xs, ys))
+        pts_list = []
+        circles = []
+        for x, y in zip(xs, ys):
+            cx = sx(x)
+            cy = sy(y)
+            cx_fmt = f"{cx:.1f}"
+            cy_fmt = f"{cy:.1f}"
+            pts_list.append(f"{cx_fmt},{cy_fmt}")
+            circles.append(f'<circle cx="{cx_fmt}" cy="{cy_fmt}" r="2.5" fill="{color}"/>')
+
+        pts = " ".join(pts_list)
         parts.append(
             f'<polyline points="{pts}" fill="none" stroke="{color}" stroke-width="2"/>'
         )
-        for x, y in zip(xs, ys):
-            parts.append(f'<circle cx="{sx(x):.1f}" cy="{sy(y):.1f}" r="2.5" fill="{color}"/>')
+        parts.extend(circles)
         ly = pad_t + 8 + idx * 20
         parts.append(
             f'<rect x="{pad_l+plot_w+16}" y="{ly-9}" width="12" height="12" fill="{color}"/>'
