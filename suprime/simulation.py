@@ -94,11 +94,14 @@ class SimNetwork:
         """Deliver every message whose delivery time has arrived, in seed order."""
         due = []
         keep = []
+        _due_app = due.append
+        _keep_app = keep.append
+        t = self._clock.t
         for item in self._queue:
-            if item[0] <= self._clock.t:
-                due.append(item)
+            if item[0] <= t:
+                _due_app(item)
             else:
-                keep.append(item)
+                _keep_app(item)
         self._queue = keep
         # Shuffle same-time deliveries deterministically to exercise reordering.
         self._rng.shuffle(due)
