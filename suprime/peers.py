@@ -137,11 +137,7 @@ class PeerTable:
         return list(self._peers.values())
 
     def alive(self) -> List[Peer]:
-        alive_peers = []
-        for p in self._peers.values():
-            if p.state == PeerState.ALIVE:
-                alive_peers.append(p)
-        return alive_peers
+        return [p for p in self._peers.values() if p.state == PeerState.ALIVE]
 
     def addresses(self) -> List[str]:
         return [p.address for p in self._peers.values()]
