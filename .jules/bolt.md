@@ -22,3 +22,6 @@
 ## 2024-08-01 - [Avoid Multiple List Comprehensions for Summing Parallel Aggregates]
 **Learning:** Calling `sum` over multiple list comprehensions (e.g., `total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))`) results in multiple iterations over the original list and the creation of multiple intermediate lists in memory.
 **Action:** When calculating multiple aggregates concurrently over the same sequence of objects, use a single inline `for` loop with accumulator variables to combine operations in one pass and eliminate intermediate allocations, significantly speeding up execution.
+## 2024-10-04 - [VectorClock Dictionary Loop Optimization]
+**Learning:** Calling `.keys() | .keys()` on dictionary views creates an overhead that can be avoided for tiny dictionaries (like vector clocks). By directly iterating over `.items()` of the first dictionary and doing an `.get(k, 0)` on the second, we avoid the set union. A subsequent loop over `.items()` of the second dictionary covers any missing keys.
+**Action:** When evaluating set unions of dictionary keys for performance critical loops, iterate `.items()` directly instead of building the `.keys() | .keys()` union first.
