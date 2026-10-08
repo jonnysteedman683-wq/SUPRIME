@@ -150,7 +150,11 @@ class DistributedStore:
 
     def tombstones(self) -> int:
         """How many deleted-but-retained entries (tombstones) are held."""
-        return sum(1 for e in self._data.values() if e.deleted)
+        count = 0
+        for e in self._data.values():
+            if e.deleted:
+                count += 1
+        return count
 
     def collect_garbage(self, min_age: float) -> int:
         """Purge tombstones older than ``min_age`` seconds; returns count purged.
