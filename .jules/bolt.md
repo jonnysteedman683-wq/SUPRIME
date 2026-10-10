@@ -22,3 +22,9 @@
 ## 2024-08-01 - [Avoid Multiple List Comprehensions for Summing Parallel Aggregates]
 **Learning:** Calling `sum` over multiple list comprehensions (e.g., `total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))`) results in multiple iterations over the original list and the creation of multiple intermediate lists in memory.
 **Action:** When calculating multiple aggregates concurrently over the same sequence of objects, use a single inline `for` loop with accumulator variables to combine operations in one pass and eliminate intermediate allocations, significantly speeding up execution.
+## 2024-08-05 - [Generator Expressions in Sum]
+**Learning:** Passing generator expressions to `sum()` (e.g., `sum(wi * xi for wi, xi in zip(w, x))`) is slower in CPython than explicitly using a `for` loop with an accumulator variable due to generator overhead and advancing.
+**Action:** Replace generator expressions passed to `sum()` with explicit `for` loops and an accumulator variable in performance-critical sections (hot loops).
+## 2024-08-06 - [Merging Redundant Iterations with Zip]
+**Learning:** Sequential iterations or explicit nested index accesses on parallel sequences (like coordinate pairs) are slower than merging them into a single loop.
+**Action:** Use `zip(xs, ys)` to merge parallel iterations instead of using separate nested loops to avoid redundant loops and overhead.
