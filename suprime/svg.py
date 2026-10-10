@@ -30,10 +30,9 @@ def line_chart(
     xmin = ymin = float("inf")
     xmax = ymax = float("-inf")
     for _, xs, ys in series:
-        for x in xs:
+        for x, y in zip(xs, ys):
             if x < xmin: xmin = x
             if x > xmax: xmax = x
-        for y in ys:
             if y < ymin: ymin = y
             if y > ymax: ymax = y
 
