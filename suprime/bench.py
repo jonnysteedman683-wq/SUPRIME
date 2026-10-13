@@ -143,7 +143,10 @@ async def bench_pushsum(n=12, rounds=40):
         await _flush()
         ests = [a.estimate("m") for a in aggs if a.estimate("m") is not None]
         if ests:
-            err = sum(abs(e - true_mean) for e in ests) / len(ests)
+            total = 0
+            for e in ests:
+                total += abs(e - true_mean)
+            err = total / len(ests)
             xs.append(r)
             ys.append(err)
     for node in nodes:
