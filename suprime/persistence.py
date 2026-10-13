@@ -111,4 +111,8 @@ class PersistenceManager:
         if not os.path.exists(self._wal_path):
             return 0
         with open(self._wal_path, "r", encoding="utf-8") as fh:
-            return sum(1 for line in fh if line.strip())
+            count = 0
+            for line in fh:
+                if line.strip():
+                    count += 1
+            return count

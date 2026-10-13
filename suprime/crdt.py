@@ -49,9 +49,10 @@ class VectorClock:
     def compare(self, other: "VectorClock") -> str:
         """Return ``'before'``, ``'after'``, ``'equal'`` or ``'concurrent'``."""
         is_less = is_greater = False
-        for k in self.clock.keys() | other.clock.keys():
-            a = self.clock.get(k, 0)
-            b = other.clock.get(k, 0)
+        c1 = self.clock
+        c2 = other.clock
+        for k, a in c1.items():
+            b = c2.get(k, 0)
             if a < b:
                 is_less = True
                 if is_greater:
@@ -60,6 +61,16 @@ class VectorClock:
                 is_greater = True
                 if is_less:
                     return "concurrent"
+        for k, b in c2.items():
+            if k not in c1:
+                if 0 < b:
+                    is_less = True
+                    if is_greater:
+                        return "concurrent"
+                elif 0 > b:
+                    is_greater = True
+                    if is_less:
+                        return "concurrent"
         if is_less:
             return "before"
         if is_greater:
