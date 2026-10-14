@@ -32,23 +32,34 @@ class LinearModel:
         self.b: float = 0.0
 
     def predict(self, x: Sequence[float]) -> float:
-        return sum(wi * xi for wi, xi in zip(self.w, x)) + self.b
+        total = 0.0
+        for wi, xi in zip(self.w, x):
+            total += wi * xi
+        return total + self.b
 
     def sgd_step(self, data: Sequence[Sample], lr: float) -> float:
         """One full-batch gradient step; returns the pre-step mean squared error."""
         n = len(data)
         if n == 0:
             return 0.0
-        grad_w = [0.0] * len(self.w)
+        w = self.w
+        grad_w = [0.0] * len(w)
         grad_b = 0.0
         sse = 0.0
+        b = self.b
+
         for x, y in data:
-            err = self.predict(x) - y
+            total = 0.0
+            for wi, xi in zip(w, x):
+                total += wi * xi
+            err = (total + b) - y
+
             sse += err * err
             for i, xi in enumerate(x):
                 grad_w[i] += 2 * err * xi / n
             grad_b += 2 * err / n
-        self.w = [wi - lr * gi for wi, gi in zip(self.w, grad_w)]
+
+        self.w = [wi - lr * gi for wi, gi in zip(w, grad_w)]
         self.b -= lr * grad_b
         return sse / n
 

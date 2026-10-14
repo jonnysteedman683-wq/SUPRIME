@@ -22,3 +22,6 @@
 ## 2024-08-01 - [Avoid Multiple List Comprehensions for Summing Parallel Aggregates]
 **Learning:** Calling `sum` over multiple list comprehensions (e.g., `total = _Mass(sum([m.s for m in masses]), sum([m.w for m in masses]))`) results in multiple iterations over the original list and the creation of multiple intermediate lists in memory.
 **Action:** When calculating multiple aggregates concurrently over the same sequence of objects, use a single inline `for` loop with accumulator variables to combine operations in one pass and eliminate intermediate allocations, significantly speeding up execution.
+## 2024-09-02 - [Avoid Generators in sum()]
+**Learning:** Passing a generator expression to `sum()` (e.g. `sum(wi * xi for wi, xi in zip(w, x))`) incurs significant overhead in CPython compared to using an explicit `for` loop with an accumulator variable, due to generator creation, function call overhead per yield, and context switching.
+**Action:** In performance-critical hot loops or methods called frequently, replace generator expressions passed to `sum()` with explicit `for` loops and accumulator variables to reduce execution time and memory allocations.
