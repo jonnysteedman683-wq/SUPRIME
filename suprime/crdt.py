@@ -89,7 +89,10 @@ class GCounter:
 
     @property
     def value(self) -> int:
-        return sum(self._counts.values())
+        ans = 0
+        for v in self._counts.values():
+            ans += v
+        return ans
 
     def merge(self, other: "GCounter") -> bool:
         changed = False
