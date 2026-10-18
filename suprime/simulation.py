@@ -69,7 +69,11 @@ class SimNetwork:
         for g in self._partitions:
             if src in g and dst in g:
                 return True
-        placed = any(src in g or dst in g for g in self._partitions)
+        placed = False
+        for g in self._partitions:
+            if src in g or dst in g:
+                placed = True
+                break
         return not placed
 
     def partition(self, *groups: List[str]) -> None:
