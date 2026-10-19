@@ -302,7 +302,12 @@ class MVRegister:
             changed = True
         else:
             old_ids = {id(v) for v in self._versions}
-            if any(id(v) not in old_ids for v in kept):
+            found_new = False
+            for v in kept:
+                if id(v) not in old_ids:
+                    found_new = True
+                    break
+            if found_new:
                 changed = True
         self._versions = kept
         self._vc = self._vc.merge(other._vc)
