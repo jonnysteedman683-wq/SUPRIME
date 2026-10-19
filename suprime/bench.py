@@ -115,7 +115,12 @@ async def bench_convergence(sizes=(5, 10, 20, 40), fanout=3, max_rounds=60):
             for node in nodes:
                 await node.tick()
             await _flush()
-            if all(node.store.get("probe") == "value" for node in nodes):
+            probe_all = True
+            for node in nodes:
+                if node.store.get("probe") != "value":
+                    probe_all = False
+                    break
+            if probe_all:
                 rounds = r
                 break
         xs.append(n)

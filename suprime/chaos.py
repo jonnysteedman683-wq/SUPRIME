@@ -73,7 +73,11 @@ class ChaosController:
                 return True
         # If neither endpoint is placed in any group, treat them as reachable
         # only when *no* group claims either of them.
-        placed = any(src in g or dst in g for g in self._partitions)
+        placed = False
+        for g in self._partitions:
+            if src in g or dst in g:
+                placed = True
+                break
         return not placed
 
     # -- per-message decisions ---------------------------------------------
