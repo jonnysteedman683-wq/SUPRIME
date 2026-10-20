@@ -146,12 +146,15 @@ async def bench_pushsum(n=12, rounds=40):
         for node in nodes:
             await node.tick()
         await _flush()
-        ests = [a.estimate("m") for a in aggs if a.estimate("m") is not None]
-        if ests:
-            err_sum = 0.0
-            for e in ests:
-                err_sum += abs(e - true_mean)
-            err = err_sum / len(ests)
+        err_sum = 0.0
+        n_ests = 0
+        for a in aggs:
+            est = a.estimate("m")
+            if est is not None:
+                err_sum += abs(est - true_mean)
+                n_ests += 1
+        if n_ests > 0:
+            err = err_sum / n_ests
             xs.append(r)
             ys.append(err)
     for node in nodes:
@@ -229,8 +232,8 @@ async def run_all(out_path: str = "bench_report.html") -> str:
 
     (px, py), (fx, fy) = await bench_broadcast()
     print("\nBroadcast messages to reach all nodes (Plumtree vs flooding):")
-    for i in range(len(px)):
-        print(f"  {px[i]:>3} nodes -> plumtree={py[i]:>4}   flood={fy[i]:>5}")
+    for px_val, py_val, fy_val in zip(px, py, fy):
+        print(f"  {px_val:>3} nodes -> plumtree={py_val:>4}   flood={fy_val:>5}")
 
     charts = [
         line_chart(

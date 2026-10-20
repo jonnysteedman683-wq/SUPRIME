@@ -46,8 +46,11 @@ def bucket_hashes(digest: Dict[str, Dict[str, Any]], n_buckets: int) -> Dict[int
 def diff_buckets(local: Dict[int, str], remote: Dict[int, str]) -> Set[int]:
     """Bucket indices whose fingerprints differ (or exist on only one side)."""
     mismatched: Set[int] = set()
-    for b in local.keys() | remote.keys():
+    for b in local:
         if local.get(b) != remote.get(b):
+            mismatched.add(b)
+    for b in remote:
+        if b not in local:
             mismatched.add(b)
     return mismatched
 
