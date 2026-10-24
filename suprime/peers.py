@@ -77,7 +77,7 @@ class PeerTable:
         """
         if node_id == self._self_id:
             return False
-        now = self._clock()
+
         existing = self._peers.get(node_id)
         if existing is None:
             self._peers[node_id] = Peer(
@@ -85,13 +85,13 @@ class PeerTable:
                 address=address,
                 heartbeat=heartbeat,
                 state=PeerState.ALIVE,
-                last_update=now,
+                last_update=self._clock(),
             )
             return True
         if heartbeat > existing.heartbeat:
             existing.heartbeat = heartbeat
             existing.address = address
-            existing.last_update = now
+            existing.last_update = self._clock()
             existing.state = PeerState.ALIVE
             return True
         return False
@@ -165,10 +165,11 @@ class PeerTable:
     def apply_digest(self, entries: Iterable[Dict[str, object]]) -> bool:
         """Merge a batch of peer descriptors from a gossip message."""
         changed = False
+        _merge = self.merge
         for entry in entries:
             node_id = str(entry["node_id"])
             address = str(entry["address"])
             heartbeat = int(entry["heartbeat"])
-            if self.merge(node_id, address, heartbeat):
+            if _merge(node_id, address, heartbeat):
                 changed = True
         return changed
