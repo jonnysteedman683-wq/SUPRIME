@@ -291,39 +291,32 @@ class MVRegister:
         combined = self._versions + other._versions
         # Keep only versions not dominated by another (causal maxima).
         kept: List[Tuple[Any, VectorClock]] = []
-        for i, (val, vc) in enumerate(combined):
+        for val, vc in combined:
             dominated = False
-            for j, (_, other_vc) in enumerate(combined):
-                if i != j and vc.compare(other_vc) == "before":
+            to_remove = set()
+            is_duplicate = False
+
+            for i, (k_val, k_vc) in enumerate(kept):
+                if val == k_val and vc.compare(k_vc) == "equal":
+                    is_duplicate = True
+                    break
+                comp = vc.compare(k_vc)
+                if comp == "before":
                     dominated = True
                     break
-            if dominated:
+                elif comp == "after":
+                    to_remove.add(i)
+
+            if dominated or is_duplicate:
                 continue
 
-            found = False
-            for k_val, k_vc in kept:
-                # Check value equality first before expensive VectorClock comparison
-                if val == k_val and vc.compare(k_vc) == "equal":
-                    found = True
-                    break
-
-            if not found:
-                kept.append((val, vc))
-        changed = False
-        if len(kept) != len(self._versions):
-            changed = True
-        else:
-            old_ids = {id(v) for v in self._versions}
-            found_new = False
-            for v in kept:
-                if id(v) not in old_ids:
-                    found_new = True
-                    break
-            if found_new:
-                changed = True
+            if to_remove:
+                kept = [k for i, k in enumerate(kept) if i not in to_remove]
+            kept.append((val, vc))
+        changed = {id(v) for v in kept} != {id(v) for v in self._versions}
         self._versions = kept
         self._vc = self._vc.merge(other._vc)
-        return changed
+        return changed or len(kept) != len(self._versions)
 
     def digest(self) -> Dict[str, Any]:
         return {
