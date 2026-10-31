@@ -21,7 +21,7 @@ tolerance — comes from the swarm underneath.
 
 from __future__ import annotations
 
-import uuid
+import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .kvstore import KVStore
@@ -162,7 +162,7 @@ class Agent:
         After the swarm settles, read the collective answer with
         :meth:`consensus` (using the returned id).
         """
-        qid = uuid.uuid4().hex
+        qid = os.urandom(16).hex()
         # The asker also answers, if it can, so it contributes to the ensemble.
         if self._answerer is not None:
             try:

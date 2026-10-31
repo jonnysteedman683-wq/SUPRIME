@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-import uuid
+import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .message import Message
@@ -181,7 +181,7 @@ class KVStore:
         need = max(0, w - 1)
         if need == 0 or not peers:
             return acks
-        req_id = uuid.uuid4().hex
+        req_id = os.urandom(16).hex()
         fut = asyncio.get_event_loop().create_future()
         self._pending[req_id] = {"acks": 0, "need": min(need, len(peers)), "future": fut}
         payload = {"req_id": req_id, "key": self._k(key), "entry": entry.to_dict()}
@@ -204,7 +204,7 @@ class KVStore:
         peers = [p.node_id for p in self._node.peers.alive()]
         need = max(0, r - 1)
         if need and peers:
-            req_id = uuid.uuid4().hex
+            req_id = os.urandom(16).hex()
             fut = asyncio.get_event_loop().create_future()
             self._pending[req_id] = {
                 "responses": collected,
