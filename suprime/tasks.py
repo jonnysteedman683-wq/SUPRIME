@@ -130,9 +130,9 @@ class TaskBoard:
 
     def submit(self, kind: str, args: Optional[Dict[str, Any]] = None, task_id: Optional[str] = None) -> str:
         """Publish a new task to the swarm and return its id."""
-        import uuid
+        import os
 
-        tid = task_id or uuid.uuid4().hex
+        tid = task_id or os.urandom(16).hex()
         task = Task(
             id=tid,
             kind=kind,

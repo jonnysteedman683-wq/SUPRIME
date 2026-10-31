@@ -19,7 +19,7 @@ to O(N) message copies and self-heals when nodes fail — no global coordination
 from __future__ import annotations
 
 import random
-import uuid
+import os
 from typing import Callable, Dict, List, Optional, Set
 
 from .message import Message
@@ -96,7 +96,7 @@ class PlumtreeBroadcast:
     async def broadcast(self, payload: dict) -> str:
         """Broadcast ``payload`` to the whole swarm; returns the message id."""
         self._sync_neighbors()
-        msg_id = uuid.uuid4().hex
+        msg_id = os.urandom(16).hex()
         self._record(msg_id, payload)
         self._deliver(msg_id, payload)
         await self._eager_push(msg_id, payload, sender=None)

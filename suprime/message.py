@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import time
-import uuid
+import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
@@ -48,7 +48,7 @@ class Message:
     src: str
     payload: Dict[str, Any] = field(default_factory=dict)
     dst: Optional[str] = None
-    id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    id: str = field(default_factory=lambda: os.urandom(16).hex())
     ts: float = field(default_factory=time.time)
 
     def to_bytes(self) -> bytes:
@@ -78,6 +78,6 @@ class Message:
             src=data["src"],
             payload=data.get("payload", {}),
             dst=data.get("dst"),
-            id=data.get("id", uuid.uuid4().hex),
+            id=data.get("id", os.urandom(16).hex()),
             ts=data.get("ts", time.time()),
         )
