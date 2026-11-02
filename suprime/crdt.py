@@ -101,10 +101,7 @@ class GCounter:
 
     @property
     def value(self) -> int:
-        ans = 0
-        for v in self._counts.values():
-            ans += v
-        return ans
+        return sum(self._counts.values())
 
     def merge(self, other: "GCounter") -> bool:
         changed = False
@@ -297,7 +294,7 @@ class MVRegister:
             is_duplicate = False
 
             for i, (k_val, k_vc) in enumerate(kept):
-                if val == k_val and vc.compare(k_vc) == "equal":
+                if val == k_val and vc.clock == k_vc.clock:
                     is_duplicate = True
                     break
                 comp = vc.compare(k_vc)
