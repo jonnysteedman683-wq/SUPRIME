@@ -88,7 +88,7 @@ class PeerTable:
                 last_update=self._clock(),
             )
             return True
-        if heartbeat > existing.heartbeat:
+        elif heartbeat > existing.heartbeat:
             existing.heartbeat = heartbeat
             existing.address = address
             existing.last_update = self._clock()
@@ -120,13 +120,18 @@ class PeerTable:
         go stale. Dead peers are removed from the table.
         """
         now = self._clock()
-        for peer in list(self._peers.values()):
+        dead_after = self._dead_after
+        suspect_after = self._suspect_after
+        dead_ids = []
+        for peer in self._peers.values():
             silence = now - peer.last_update
-            if silence >= self._dead_after:
+            if silence >= dead_after:
                 peer.state = PeerState.DEAD
-                self._peers.pop(peer.node_id, None)
-            elif silence >= self._suspect_after:
+                dead_ids.append(peer.node_id)
+            elif silence >= suspect_after:
                 peer.state = PeerState.SUSPECT
+        for node_id in dead_ids:
+            self._peers.pop(node_id, None)
 
     # -- queries ------------------------------------------------------------
 
@@ -137,18 +142,17 @@ class PeerTable:
         return list(self._peers.values())
 
     def alive(self) -> List[Peer]:
-        alive_peers = []
-        for p in self._peers.values():
-            if p.state == PeerState.ALIVE:
-                alive_peers.append(p)
-        return alive_peers
+        return [p for p in self._peers.values() if p.state == PeerState.ALIVE]
 
     def addresses(self) -> List[str]:
         return [p.address for p in self._peers.values()]
 
     def digest(self) -> List[Dict[str, object]]:
         """A compact, serialisable snapshot for gossip piggybacking."""
-        return [p.to_dict() for p in self._peers.values()]
+        return [
+            {"node_id": p.node_id, "address": p.address, "heartbeat": p.heartbeat}
+            for p in self._peers.values()
+        ]
 
     def known_ids(self, include_self: bool = False) -> List[str]:
         ids = list(self._peers.keys())
@@ -167,9 +171,6 @@ class PeerTable:
         changed = False
         _merge = self.merge
         for entry in entries:
-            node_id = str(entry["node_id"])
-            address = str(entry["address"])
-            heartbeat = int(entry["heartbeat"])
-            if _merge(node_id, address, heartbeat):
+            if _merge(entry["node_id"], entry["address"], entry["heartbeat"]):
                 changed = True
         return changed
