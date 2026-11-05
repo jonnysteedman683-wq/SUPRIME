@@ -33,8 +33,8 @@ class LinearModel:
 
     def predict(self, x: Sequence[float]) -> float:
         ans = 0.0
-        for wi, xi in zip(self.w, x):
-            ans += wi * xi
+        for i in range(len(self.w)):
+            ans += self.w[i] * x[i]
         return ans + self.b
 
     def sgd_step(self, data: Sequence[Sample], lr: float) -> float:
@@ -63,12 +63,14 @@ class LinearModel:
                 grad_w[i] += err_factor * x[i]
             grad_b += err_factor
 
-        self.w = [wi - lr * gi for wi, gi in zip(self.w, grad_w)]
+        for i in range(len(self.w)):
+            self.w[i] -= lr * grad_w[i]
         self.b -= lr * grad_b
         return sse / n
 
     def average_with(self, other_w: List[float], other_b: float) -> None:
-        self.w = [(a + b) / 2.0 for a, b in zip(self.w, other_w)]
+        for i in range(len(self.w)):
+            self.w[i] = (self.w[i] + other_w[i]) / 2.0
         self.b = (self.b + other_b) / 2.0
 
 

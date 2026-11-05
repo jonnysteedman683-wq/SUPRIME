@@ -30,9 +30,10 @@ def line_chart(
     xmin = ymin = float("inf")
     xmax = ymax = float("-inf")
     for _, xs, ys in series:
-        for x, y in zip(xs, ys):
+        for x in xs:
             if x < xmin: xmin = x
             if x > xmax: xmax = x
+        for y in ys:
             if y < ymin: ymin = y
             if y > ymax: ymax = y
 
@@ -113,9 +114,9 @@ def line_chart(
         color = _PALETTE[idx % len(_PALETTE)]
         pts_list = []
         circles = []
-        for x, y in zip(xs, ys):
-            cx = sx(x)
-            cy = sy(y)
+        for i in range(len(xs)):
+            cx = sx(xs[i])
+            cy = sy(ys[i])
             cx_fmt = f"{cx:.1f}"
             cy_fmt = f"{cy:.1f}"
             pts_list.append(f"{cx_fmt},{cy_fmt}")

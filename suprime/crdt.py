@@ -297,6 +297,8 @@ class MVRegister:
                 if val == k_val and vc.clock == k_vc.clock:
                     is_duplicate = True
                     break
+                if vc.clock == k_vc.clock:
+                    continue
                 comp = vc.compare(k_vc)
                 if comp == "before":
                     dominated = True
