@@ -120,13 +120,16 @@ class PeerTable:
         go stale. Dead peers are removed from the table.
         """
         now = self._clock()
-        for peer in list(self._peers.values()):
+        dead_ids = []
+        for peer in self._peers.values():
             silence = now - peer.last_update
             if silence >= self._dead_after:
                 peer.state = PeerState.DEAD
-                self._peers.pop(peer.node_id, None)
+                dead_ids.append(peer.node_id)
             elif silence >= self._suspect_after:
                 peer.state = PeerState.SUSPECT
+        for dead_id in dead_ids:
+            self._peers.pop(dead_id, None)
 
     # -- queries ------------------------------------------------------------
 

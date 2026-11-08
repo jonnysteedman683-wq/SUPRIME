@@ -181,10 +181,10 @@ class ORSet:
 
     def contains(self, element: Any) -> bool:
         tags = self._adds.get(element)
-        return bool(tags and not tags.issubset(self._removed))
+        return bool(tags and not tags <= self._removed)
 
     def elements(self) -> Set[Any]:
-        return {e for e, tags in self._adds.items() if not tags.issubset(self._removed)}
+        return {e for e, tags in self._adds.items() if not tags <= self._removed}
 
     def merge(self, other: "ORSet") -> bool:
         changed = False
@@ -297,7 +297,10 @@ class MVRegister:
                 if val == k_val and vc.clock == k_vc.clock:
                     is_duplicate = True
                     break
-                comp = vc.compare(k_vc)
+                if vc.clock == k_vc.clock:
+                    comp = "equal"
+                else:
+                    comp = vc.compare(k_vc)
                 if comp == "before":
                     dominated = True
                     break
